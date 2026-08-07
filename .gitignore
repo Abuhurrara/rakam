@@ -1,0 +1,27 @@
+# Env
+.env
+.env.local
+*.env
+!.env.example
+
+# Go
+/api/bin/
+/api/tmp/
+*.exe
+*.test
+*.out
+
+# Node / Next
+node_modules/
+.next/
+out/
+.vercel/
+*.tsbuildinfo
+npm-debug.log*
+yarn-error.log*
+
+# Editor / OS
+.DS_Store
+.idea/
+.vscode/
+*.swp
