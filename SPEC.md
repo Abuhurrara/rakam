@@ -10,7 +10,7 @@ Build in the phases at the end. Each phase must end with something that runs and
 
 ## Stack
 
-**API** — Go 1.23, standard library `net/http` (Go 1.22+ routing patterns), `pgx/v5` with `pgxpool`, `golang-migrate` for migrations, `golang-jwt/jwt/v5`, `golang.org/x/crypto/bcrypt`, `log/slog`. Deployed to Render as a free web service via a multi-stage Dockerfile.
+**API** — Go 1.26, standard library `net/http` (Go 1.22+ routing patterns), `pgx/v5` with `pgxpool`, `golang-migrate` for migrations, `golang-jwt/jwt/v5`, `golang.org/x/crypto/bcrypt`, `log/slog`. Deployed to Render as a free web service via a multi-stage Dockerfile.
 
 **Web** — Next.js 15 App Router, TypeScript strict, Tailwind v4. Deployed to Vercel.
 

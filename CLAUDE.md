@@ -4,7 +4,7 @@ Read `SPEC.md` for what to build. This file is how to work here.
 
 ## Ground rules
 
-- Go 1.23. Standard library `net/http` routing — do not add chi, gin, echo, or any router.
+- Go 1.26. Standard library `net/http` routing — do not add chi, gin, echo, or any router.
 - Do not add a Go module or npm package that isn't already in `SPEC.md`. If you think one is needed, stop and ask first with a one-line reason.
 - Hand-written SQL with pgx. No ORM, no sqlc, no query builder.
 - `internal/domain` imports only the standard library. If you need pgx or net/http in there, the design is wrong — fix the design, not the import.
