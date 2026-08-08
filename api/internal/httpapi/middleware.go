@@ -5,6 +5,9 @@ import (
 	"log/slog"
 	"net/http"
 	"time"
+
+	"github.com/Abuhurrara/rakam/api/internal/auth"
+	"github.com/Abuhurrara/rakam/api/internal/domain"
 )
 
 type contextKey string
@@ -16,11 +19,21 @@ func UserIDFromContext(ctx context.Context) (string, bool) {
 	return id, ok
 }
 
-// withSeedUser is a temporary stand-in for phase 2 session authentication.
-// It unconditionally injects the sole seeded user's ID into the request
-// context and gets deleted outright once real session middleware exists.
-func withSeedUser(userID string, next http.Handler) http.Handler {
+// requireAuth rejects requests with a missing or invalid session cookie
+// and otherwise puts the token's user ID into the request context under
+// the same key existing handlers already read via UserIDFromContext.
+func requireAuth(secret []byte, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		cookie, err := r.Cookie(cookieName)
+		if err != nil {
+			writeError(w, domain.ErrUnauthorized)
+			return
+		}
+		userID, err := auth.VerifyToken(secret, cookie.Value)
+		if err != nil {
+			writeError(w, domain.ErrUnauthorized)
+			return
+		}
 		ctx := context.WithValue(r.Context(), userIDContextKey, userID)
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})

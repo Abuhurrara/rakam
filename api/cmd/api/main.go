@@ -26,15 +26,15 @@ func main() {
 	}
 	defer pool.Close()
 
-	seedUserID, err := postgres.SoleUserID(ctx, pool)
-	if err != nil {
-		log.Fatalf("resolving seeded user (did you run `make seed`?): %v", err)
-	}
+	secret := []byte(cfg.JWTSecret)
 
 	categoryRepo := postgres.NewCategoryRepo(pool)
 	categorySvc := service.NewCategoryService(categoryRepo)
 
-	router := httpapi.NewRouter(categorySvc, pool, seedUserID)
+	userRepo := postgres.NewUserRepo(pool)
+	authSvc := service.NewAuthService(userRepo, secret)
+
+	router := httpapi.NewRouter(categorySvc, authSvc, pool, secret)
 
 	addr := "0.0.0.0:" + cfg.Port
 	slog.Info("starting server", "addr", addr)
