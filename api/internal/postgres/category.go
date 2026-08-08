@@ -45,6 +45,22 @@ func (r *CategoryRepo) List(ctx context.Context, userID string) ([]domain.Catego
 	return categories, nil
 }
 
+func (r *CategoryRepo) Get(ctx context.Context, userID, id string) (domain.Category, error) {
+	var c domain.Category
+	err := r.pool.QueryRow(ctx, `
+		select id, user_id, name, kind, icon, color, sort_order, is_archived, created_at, updated_at
+		from categories
+		where id = $1 and user_id = $2
+	`, id, userID).Scan(&c.ID, &c.UserID, &c.Name, &c.Kind, &c.Icon, &c.Color, &c.SortOrder, &c.IsArchived, &c.CreatedAt, &c.UpdatedAt)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return domain.Category{}, domain.ErrNotFound
+		}
+		return domain.Category{}, fmt.Errorf("querying category: %w", err)
+	}
+	return c, nil
+}
+
 func (r *CategoryRepo) Create(ctx context.Context, c domain.Category) (domain.Category, error) {
 	err := r.pool.QueryRow(ctx, `
 		insert into categories (user_id, name, kind, icon, color, sort_order, is_archived)

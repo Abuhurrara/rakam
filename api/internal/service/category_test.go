@@ -28,6 +28,14 @@ func (f *fakeCategoryRepo) List(ctx context.Context, userID string) ([]domain.Ca
 	return result, nil
 }
 
+func (f *fakeCategoryRepo) Get(ctx context.Context, userID, id string) (domain.Category, error) {
+	existing, ok := f.categories[id]
+	if !ok || existing.UserID != userID {
+		return domain.Category{}, domain.ErrNotFound
+	}
+	return existing, nil
+}
+
 func (f *fakeCategoryRepo) Create(ctx context.Context, c domain.Category) (domain.Category, error) {
 	f.nextID++
 	c.ID = fmt.Sprintf("cat-%d", f.nextID)
