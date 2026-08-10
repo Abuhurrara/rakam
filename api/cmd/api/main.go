@@ -49,7 +49,12 @@ func main() {
 	userRepo := postgres.NewUserRepo(pool)
 	authSvc := service.NewAuthService(userRepo, secret)
 
-	router := httpapi.NewRouter(categorySvc, transactionSvc, authSvc, pool, secret)
+	personRepo := postgres.NewPersonRepo(pool)
+	debtRepo := postgres.NewDebtRepo(pool)
+	personSvc := service.NewPersonService(personRepo, debtRepo)
+	debtSvc := service.NewDebtService(debtRepo, personRepo, categoryRepo)
+
+	router := httpapi.NewRouter(categorySvc, transactionSvc, authSvc, personSvc, debtSvc, pool, secret)
 
 	addr := "0.0.0.0:" + cfg.Port
 	slog.Info("starting server", "addr", addr)

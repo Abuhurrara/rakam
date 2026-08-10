@@ -19,6 +19,14 @@ func writeError(w http.ResponseWriter, err error) {
 		status = http.StatusBadRequest
 	case errors.Is(err, domain.ErrInvalidTransaction):
 		status = http.StatusBadRequest
+	case errors.Is(err, domain.ErrInvalidPerson):
+		status = http.StatusBadRequest
+	case errors.Is(err, domain.ErrInvalidDebtEntry):
+		status = http.StatusBadRequest
+	case errors.Is(err, domain.ErrAlreadySettled):
+		status = http.StatusConflict
+	case errors.Is(err, domain.ErrPersonHasDebtEntries):
+		status = http.StatusConflict
 	case errors.Is(err, domain.ErrUnauthorized):
 		status = http.StatusUnauthorized
 	case errors.Is(err, domain.ErrInvalidCredentials):
