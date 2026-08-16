@@ -467,14 +467,14 @@ func TestDebtService_SettleAll_CategoryRejectedForMixedDirections(t *testing.T) 
 	if !errors.Is(err, domain.ErrInvalidDebtEntry) {
 		t.Fatalf("SettleAll() error = %v; want ErrInvalidDebtEntry", err)
 	}
-	if debtRepo.HasUnsettledMustBeUnchanged(t, "user-1", person.ID) != 2 {
+	if debtRepo.countUnsettled(t, "user-1", person.ID) != 2 {
 		t.Fatal("SettleAll() mutated entries despite the category rejection")
 	}
 }
 
-// HasUnsettledMustBeUnchanged is a test-only helper counting unsettled
+// countUnsettled is a test-only helper counting unsettled
 // entries, used to confirm a rejected SettleAll call touched nothing.
-func (f *fakeDebtRepo) HasUnsettledMustBeUnchanged(t *testing.T, userID, personID string) int {
+func (f *fakeDebtRepo) countUnsettled(t *testing.T, userID, personID string) int {
 	t.Helper()
 	count := 0
 	for _, e := range f.entries {
@@ -500,7 +500,7 @@ func TestDebtService_SettleAll_ChecksPersonFirst(t *testing.T) {
 	if _, _, err := svc.SettleAll(ctx, "user-2", person.ID, false, nil); !errors.Is(err, domain.ErrNotFound) {
 		t.Fatalf("SettleAll() by wrong user error = %v; want ErrNotFound", err)
 	}
-	if debtRepo.HasUnsettledMustBeUnchanged(t, "user-1", person.ID) != 1 {
+	if debtRepo.countUnsettled(t, "user-1", person.ID) != 1 {
 		t.Fatal("SettleAll() mutated entries despite failing the person check")
 	}
 }
