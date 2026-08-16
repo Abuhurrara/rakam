@@ -26,4 +26,8 @@ type TransactionRepo interface {
 	Create(ctx context.Context, t domain.Transaction) (domain.Transaction, error)
 	Update(ctx context.Context, t domain.Transaction) (domain.Transaction, error)
 	Delete(ctx context.Context, userID, id string) error
+
+	// SumByKind returns COALESCEd income and expense totals for occurred_at
+	// in [from, to) — 0 for either with no matching rows.
+	SumByKind(ctx context.Context, userID string, from, to time.Time) (income, expense domain.Money, err error)
 }

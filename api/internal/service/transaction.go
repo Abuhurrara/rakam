@@ -53,16 +53,10 @@ func (s *TransactionService) List(ctx context.Context, userID string, p ListPara
 	}
 
 	if p.MonthStr != nil {
-		parsed, err := time.Parse("2006-01", *p.MonthStr)
+		first, next, err := karachiMonthRange(*p.MonthStr, s.loc)
 		if err != nil {
-			return ListResult{}, fmt.Errorf("%w: month must be YYYY-MM", domain.ErrInvalidTransaction)
+			return ListResult{}, err
 		}
-		// Anchoring the month's first instant to the Karachi location (rather
-		// than the UTC instant time.Parse produced) is what makes a purchase
-		// at 2am Karachi on the 1st land in this month instead of the
-		// previous one when compared against occurred_at in the database.
-		first := time.Date(parsed.Year(), parsed.Month(), 1, 0, 0, 0, 0, s.loc)
-		next := first.AddDate(0, 1, 0)
 		filter.From = &first
 		filter.To = &next
 	}

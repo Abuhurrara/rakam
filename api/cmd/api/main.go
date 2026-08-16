@@ -54,7 +54,15 @@ func main() {
 	personSvc := service.NewPersonService(personRepo, debtRepo)
 	debtSvc := service.NewDebtService(debtRepo, personRepo, categoryRepo)
 
-	router := httpapi.NewRouter(categorySvc, transactionSvc, authSvc, personSvc, debtSvc, pool, secret)
+	budgetRepo := postgres.NewBudgetRepo(pool)
+	budgetSvc := service.NewBudgetService(budgetRepo, categoryRepo, loc)
+
+	billRepo := postgres.NewRecurringBillRepo(pool)
+	billSvc := service.NewRecurringBillService(billRepo, categoryRepo, loc)
+
+	summarySvc := service.NewSummaryService(transactionRepo, budgetSvc, billSvc, personSvc, loc)
+
+	router := httpapi.NewRouter(categorySvc, transactionSvc, authSvc, personSvc, debtSvc, budgetSvc, billSvc, summarySvc, pool, secret)
 
 	addr := "0.0.0.0:" + cfg.Port
 	slog.Info("starting server", "addr", addr)
