@@ -7,6 +7,7 @@ import {
   useEffect,
   useLayoutEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from "react";
@@ -118,27 +119,56 @@ function Sheet({ mode, onClose }: { mode: Mode; onClose: () => void }) {
     mark("sheetReady");
   }, []);
 
-  // The browser back button closes the sheet rather than leaving the app.
-  // Matters most when installed as a PWA, where back is the only gesture.
+  /*
+   * The browser back button closes the sheet rather than leaving the app.
+   * Matters most when installed as a PWA, where back is the only gesture.
+   *
+   * This effect must be safe to run twice. React Strict Mode deliberately
+   * runs effects run -> clean up -> run again in development, and an earlier
+   * version of this called history.back() in the cleanup: the sheet pushed an
+   * entry, the cleanup immediately went back, the effect re-ran and attached a
+   * new listener, and that listener caught the pop and closed the sheet. It
+   * opened and vanished in a blink.
+   *
+   * So: the ref guards the push (refs survive Strict Mode's remount), and the
+   * cleanup only ever removes its listener. Nothing here navigates.
+   */
+  const pushedHistoryRef = useRef(false);
+
   useEffect(() => {
-    window.history.pushState({ rakamSheet: true }, "");
-    const onPop = () => onClose();
-    window.addEventListener("popstate", onPop);
-    return () => {
-      window.removeEventListener("popstate", onPop);
-      // If the sheet was closed by anything other than back, drop the entry
-      // we pushed so the user's next back press does not just re-consume it.
-      if (window.history.state?.rakamSheet) window.history.back();
+    if (!pushedHistoryRef.current) {
+      window.history.pushState({ rakamSheet: true }, "");
+      pushedHistoryRef.current = true;
+    }
+    const onPop = () => {
+      pushedHistoryRef.current = false;
+      onClose();
     };
+    window.addEventListener("popstate", onPop);
+    return () => window.removeEventListener("popstate", onPop);
+  }, [onClose]);
+
+  /**
+   * The single way this sheet closes. Going back through history keeps the
+   * entry we pushed balanced, and the popstate listener above does the actual
+   * closing — so every route out of the sheet behaves identically.
+   */
+  const closeSheet = useCallback(() => {
+    if (pushedHistoryRef.current) {
+      pushedHistoryRef.current = false;
+      window.history.back();
+    } else {
+      onClose();
+    }
   }, [onClose]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
+      if (e.key === "Escape") closeSheet();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [onClose]);
+  }, [closeSheet]);
 
   function handleSave() {
     if (!canSave) return;
@@ -161,15 +191,18 @@ function Sheet({ mode, onClose }: { mode: Mode; onClose: () => void }) {
 
     // Close first. The save continues in the background and reports itself
     // through the list row and, if it fails, a persistent toast.
-    onClose();
+    closeSheet();
 
     if (editing) {
       update(editing.id, input);
     } else {
       save(input);
       // Land the user where the new row appears, so the success signal is
-      // always visible without needing a success toast.
-      if (pathname !== "/expenses") router.push("/expenses");
+      // always visible without needing a success toast. Queued so the history
+      // pop from closeSheet() settles before the router navigates.
+      if (pathname !== "/expenses") {
+        setTimeout(() => router.push("/expenses"), 0);
+      }
     }
   }
 
@@ -178,7 +211,7 @@ function Sheet({ mode, onClose }: { mode: Mode; onClose: () => void }) {
       <button
         type="button"
         aria-label="Close"
-        onClick={onClose}
+        onClick={closeSheet}
         className="absolute inset-0 bg-overlay"
       />
 
@@ -194,7 +227,7 @@ function Sheet({ mode, onClose }: { mode: Mode; onClose: () => void }) {
         <div className="mb-1 flex items-center justify-between">
           <button
             type="button"
-            onClick={onClose}
+            onClick={closeSheet}
             className="-ml-2 min-h-11 px-2 text-sm text-ink-soft"
           >
             Cancel
@@ -210,7 +243,7 @@ function Sheet({ mode, onClose }: { mode: Mode; onClose: () => void }) {
                   setConfirmingDelete(true);
                   return;
                 }
-                onClose();
+                closeSheet();
                 remove(editing);
               }}
               className={`-mr-2 min-h-11 px-2 text-sm ${
