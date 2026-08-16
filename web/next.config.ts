@@ -16,6 +16,10 @@ if (!apiOrigin) {
 }
 
 const nextConfig: NextConfig = {
+  // Lets a production build go somewhere other than .next, so building does
+  // not clobber a dev server that is already running against it.
+  distDir: process.env.NEXT_DIST_DIR || ".next",
+
   async rewrites() {
     return [
       {

@@ -56,10 +56,13 @@ export function Keypad({
           key={key}
           type="button"
           aria-label={key === "back" ? "Delete last digit" : key}
-          {...tap(() => {
-            countTap();
-            onKey((current) => applyKey(current, key));
-          })}
+          {...tap(
+            () => {
+              countTap();
+              onKey((current) => applyKey(current, key));
+            },
+            { fast: true },
+          )}
           className={`flex h-14 select-none items-center justify-center rounded-xl text-2xl font-medium transition-colors active:bg-paper-sunken ${
             key === "back"
               ? "bg-transparent text-ink-soft"

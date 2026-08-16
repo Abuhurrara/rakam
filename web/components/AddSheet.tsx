@@ -366,7 +366,7 @@ function CategoryChips({
             key={c.id}
             type="button"
             aria-pressed={selected}
-            {...tap(() => onSelect(c.id))}
+            {...tap(() => onSelect(c.id), { fast: true })}
             className={`flex min-h-11 items-center gap-1.5 rounded-full border px-3 text-sm transition-colors ${
               selected
                 ? "border-primary bg-primary-tint font-medium text-ink"
