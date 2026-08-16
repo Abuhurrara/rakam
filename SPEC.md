@@ -32,7 +32,6 @@ rakam/
       httpapi/               handlers, middleware, router
       auth/                  password hashing, token issue and verify
       config/                env loading
-      events/                in-process event bus
     migrations/
     Dockerfile
   web/
@@ -57,8 +56,8 @@ Rules:
 
 1. **`domain/` imports nothing outside the standard library.** No pgx, no net/http, no JSON tags on domain entities. If a domain file imports a driver, the layering is broken.
 2. **Every repository is an interface in `port/`.** Implementations live in `postgres/` and are the only place SQL is written. Ports needed: `TransactionRepo`, `DebtRepo`, `PersonRepo`, `BudgetRepo`, `RecurringBillRepo`, `WorkLogRepo`, `CategoryRepo`, `UserRepo`.
-3. **Services take dependencies as constructor parameters.** `NewTransactionService(txRepo port.TransactionRepo, bus port.EventBus) *TransactionService`. No package-level globals, no service importing a concrete repo.
-4. **`main.go` is the only file that knows concrete types.** It opens the pool, constructs repositories, injects them into services, injects services into handlers, registers event subscribers, starts the server. Nothing else wires anything.
+3. **Services take dependencies as constructor parameters.** `NewTransactionService(txRepo port.TransactionRepo, catRepo port.CategoryRepo, loc *time.Location) *TransactionService`. No package-level globals, no service importing a concrete repo.
+4. **`main.go` is the only file that knows concrete types.** It opens the pool, constructs repositories, injects them into services, injects services into handlers, starts the server. Nothing else wires anything.
 5. **Handlers are thin.** Decode JSON, validate, read user ID from request context, call one service method, map domain errors to status codes, encode the response. If a handler exceeds about 30 lines, logic has leaked out of the service.
 6. **Repositories return domain types, not database rows.** Map at the boundary.
 7. **Errors are domain sentinel values** — `domain.ErrNotFound`, `domain.ErrInvalidAmount`, `domain.ErrDuplicateBudget`. A single mapping function in `httpapi` turns them into status codes. Services never return raw pgx errors upward.
@@ -67,15 +66,6 @@ Rules:
 ### Interfaces, kept honest
 
 Define interfaces where the consumer lives, not next to the implementation, and keep them narrow — a service that only reads gets a read-only port. Do not write a generic `Repository[T]`. Do not add a decorator chain, a mediator, or a CQRS split. If a pattern isn't solving a problem named in this spec, leave it out. Over-layering is a defect, same as under-layering.
-
-### Domain events
-
-`port.EventBus` with an in-memory synchronous implementation in `events/`. Subscribers are registered in `main.go`. Exactly two subscribers in this build:
-
-- `DebtSettled` → creates a transaction, only when the settle request asked for it.
-- `TransactionCreated` → recomputes the affected budget and records whether a threshold was crossed.
-
-Synchronous and in-process. No queue, no broker.
 
 ### Testing
 
@@ -269,9 +259,9 @@ Load config once at startup into a struct and fail fast with a clear message if 
 
 **3 — Transactions.** Domain, repo, service, handlers, filtering by month and category and search. Money type and parsing with tests. *Verify:* create, list, filter, update, delete all work over HTTP, and Karachi month boundaries are correct for a 2am purchase on the 1st.
 
-**4 — Ledger.** People with net balances, entries, settle, settle-all. Event bus plus the `DebtSettled` subscriber. *Verify:* balances are correct across mixed directions with partial settlement, and settling with the flag creates a transaction while settling without it does not.
+**4 — Ledger.** People with net balances, entries, settle, settle-all. `DebtSettled` handled by a direct, atomic repo method (`DebtRepo.SettleWithTransaction`/`SettleAll`), not an event. *Verify:* balances are correct across mixed directions with partial settlement, and settling with the flag creates a transaction while settling without it does not.
 
-**5 — Budgets and bills.** Budgets with spent-per-category, recurring bills CRUD, idempotent generation, `TransactionCreated` subscriber, the summary endpoint. *Verify:* generation runs exactly once per bill per month under repeated calls.
+**5 — Budgets and bills.** Budgets with spent-per-category, recurring bills CRUD, idempotent generation (race-safe at the database level), the summary endpoint. Budget spent is computed on read from transactions — no subscriber, no cached value to recompute. *Verify:* generation runs exactly once per bill per month under repeated calls.
 
 **6 — Web foundation.** Next.js, Tailwind with the palette and type scale, the API rewrite, api client, login page, route protection, tab bar, and the add-transaction flow plus expenses list. *Verify:* the add flow genuinely takes under 5 seconds on a phone-sized viewport.
 

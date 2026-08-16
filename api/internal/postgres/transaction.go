@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -145,6 +146,20 @@ func (r *TransactionRepo) Update(ctx context.Context, t domain.Transaction) (dom
 		return domain.Transaction{}, fmt.Errorf("updating transaction: %w", err)
 	}
 	return t, nil
+}
+
+func (r *TransactionRepo) SumByKind(ctx context.Context, userID string, from, to time.Time) (income, expense domain.Money, err error) {
+	err = r.pool.QueryRow(ctx, `
+		select
+			coalesce(sum(amount_paisa) filter (where kind = 'income'), 0),
+			coalesce(sum(amount_paisa) filter (where kind = 'expense'), 0)
+		from transactions
+		where user_id = $1 and occurred_at >= $2 and occurred_at < $3
+	`, userID, from, to).Scan(&income, &expense)
+	if err != nil {
+		return 0, 0, fmt.Errorf("summing transactions: %w", err)
+	}
+	return income, expense, nil
 }
 
 func (r *TransactionRepo) Delete(ctx context.Context, userID, id string) error {

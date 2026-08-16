@@ -6,7 +6,7 @@ import (
 	"github.com/Abuhurrara/rakam/api/internal/service"
 )
 
-func NewRouter(categorySvc *service.CategoryService, transactionSvc *service.TransactionService, authSvc *service.AuthService, personSvc *service.PersonService, debtSvc *service.DebtService, p pinger, jwtSecret []byte) http.Handler {
+func NewRouter(categorySvc *service.CategoryService, transactionSvc *service.TransactionService, authSvc *service.AuthService, personSvc *service.PersonService, debtSvc *service.DebtService, budgetSvc *service.BudgetService, billSvc *service.RecurringBillService, summarySvc *service.SummaryService, p pinger, jwtSecret []byte) http.Handler {
 	mux := http.NewServeMux()
 
 	mux.HandleFunc("GET /api/health", handleHealth(p))
@@ -33,6 +33,17 @@ func NewRouter(categorySvc *service.CategoryService, transactionSvc *service.Tra
 	mux.Handle("POST /api/people/{id}/settle-all", requireAuth(jwtSecret, handleSettleAllDebtEntries(debtSvc)))
 	mux.Handle("POST /api/debt-entries/{id}/settle", requireAuth(jwtSecret, handleSettleDebtEntry(debtSvc)))
 	mux.Handle("DELETE /api/debt-entries/{id}", requireAuth(jwtSecret, handleDeleteDebtEntry(debtSvc)))
+
+	mux.Handle("GET /api/budgets", requireAuth(jwtSecret, handleListBudgets(budgetSvc)))
+	mux.Handle("PUT /api/budgets", requireAuth(jwtSecret, handleUpsertBudget(budgetSvc)))
+	mux.Handle("DELETE /api/budgets/{id}", requireAuth(jwtSecret, handleDeleteBudget(budgetSvc)))
+
+	mux.Handle("GET /api/bills", requireAuth(jwtSecret, handleListBills(billSvc)))
+	mux.Handle("POST /api/bills", requireAuth(jwtSecret, handleCreateBill(billSvc)))
+	mux.Handle("PATCH /api/bills/{id}", requireAuth(jwtSecret, handleUpdateBill(billSvc)))
+	mux.Handle("DELETE /api/bills/{id}", requireAuth(jwtSecret, handleDeleteBill(billSvc)))
+
+	mux.Handle("GET /api/summary", requireAuth(jwtSecret, handleSummary(summarySvc)))
 
 	return recovery(logging(mux))
 }

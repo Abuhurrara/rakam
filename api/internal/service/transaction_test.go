@@ -109,6 +109,21 @@ func (f *fakeTransactionRepo) Delete(ctx context.Context, userID, id string) err
 	return nil
 }
 
+func (f *fakeTransactionRepo) SumByKind(ctx context.Context, userID string, from, to time.Time) (income, expense domain.Money, err error) {
+	for _, t := range f.transactions {
+		if t.UserID != userID || t.OccurredAt.Before(from) || !t.OccurredAt.Before(to) {
+			continue
+		}
+		switch t.Kind {
+		case domain.KindIncome:
+			income += t.AmountPaisa
+		case domain.KindExpense:
+			expense += t.AmountPaisa
+		}
+	}
+	return income, expense, nil
+}
+
 func TestTransactionService_Create(t *testing.T) {
 	const (
 		userID      = "user-1"

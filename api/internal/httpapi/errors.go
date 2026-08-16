@@ -27,6 +27,12 @@ func writeError(w http.ResponseWriter, err error) {
 		status = http.StatusConflict
 	case errors.Is(err, domain.ErrPersonHasDebtEntries):
 		status = http.StatusConflict
+	case errors.Is(err, domain.ErrInvalidBudget):
+		status = http.StatusBadRequest
+	case errors.Is(err, domain.ErrInvalidRecurringBill):
+		status = http.StatusBadRequest
+	case errors.Is(err, domain.ErrInvalidMonth):
+		status = http.StatusBadRequest
 	case errors.Is(err, domain.ErrUnauthorized):
 		status = http.StatusUnauthorized
 	case errors.Is(err, domain.ErrInvalidCredentials):
