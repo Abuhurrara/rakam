@@ -55,7 +55,14 @@ export async function checkAuth(): Promise<AuthCheck> {
       signal: AbortSignal.timeout(SERVER_AUTH_TIMEOUT_MS),
     });
 
-    if (res.status === 401) return { state: "unauthenticated" };
+    // Any 4xx means this session will never work, so retrying is pointless.
+    // 401 is a bad or expired token; 404 is a valid token naming a user that
+    // no longer exists (the database was re-seeded under an old cookie). Both
+    // are "log in again", not "wait and try again".
+    if (res.status >= 400 && res.status < 500) {
+      return { state: "unauthenticated" };
+    }
+    // 5xx is the server having a bad moment — that one is worth waiting out.
     if (!res.ok) {
       return { state: "provisional", reason: `API returned ${res.status}` };
     }
