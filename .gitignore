@@ -25,3 +25,5 @@ yarn-error.log*
 .idea/
 .vscode/
 *.swp
+# Alternate build dir used for verifying without clobbering a running dev server
+.next-*/

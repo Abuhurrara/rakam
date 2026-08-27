@@ -1,0 +1,193 @@
+@import "tailwindcss";
+
+/*
+  Rakam — a modern take on the handwritten ledger a shopkeeper keeps.
+
+  Warm paper rather than stark white, deep ink-green primary, muted gold for
+  accents and warnings, brick red for money going out. Dark mode is deep ink
+  on warm charcoal — re-picked, not the light palette inverted.
+*/
+
+:root {
+  /* Surfaces */
+  --paper: #f6f1e7;
+  --paper-raised: #fffdf7;
+  --paper-sunken: #efe8da;
+
+  /* Text */
+  --ink: #211d17;
+  --ink-soft: #6d6455;
+  --ink-faint: #9a9082;
+
+  /* Deep ink-green: primary actions, money coming in */
+  --primary: #17493c;
+  --primary-hover: #10362c;
+  --primary-ink: #fffdf7;
+  --primary-tint: #e2ece7;
+
+  /* Muted gold: accents, the 80% budget warning */
+  --gold: #9c7a22;
+  --gold-tint: #f5ecd4;
+
+  /* Brick red: money going out, destructive, the 100% warning */
+  --brick: #9d3a2c;
+  --brick-tint: #f7e4de;
+
+  /* Hairline rules — the ledger-paper feel */
+  --line: #e0d7c5;
+  --line-strong: #cabfa8;
+
+  --overlay: rgb(33 29 23 / 0.45);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --paper: #1a1713;
+    --paper-raised: #24201a;
+    --paper-sunken: #131110;
+
+    --ink: #ece4d5;
+    --ink-soft: #a99e8c;
+    --ink-faint: #7b7263;
+
+    --primary: #5cae91;
+    --primary-hover: #74c0a5;
+    --primary-ink: #10231d;
+    --primary-tint: #1f3a32;
+
+    --gold: #d3a74d;
+    --gold-tint: #38301c;
+
+    --brick: #dd7a68;
+    --brick-tint: #3a241f;
+
+    --line: #332d24;
+    --line-strong: #4a4235;
+
+    --overlay: rgb(10 8 6 / 0.6);
+  }
+}
+
+@theme inline {
+  --color-paper: var(--paper);
+  --color-paper-raised: var(--paper-raised);
+  --color-paper-sunken: var(--paper-sunken);
+
+  --color-ink: var(--ink);
+  --color-ink-soft: var(--ink-soft);
+  --color-ink-faint: var(--ink-faint);
+
+  --color-primary: var(--primary);
+  --color-primary-hover: var(--primary-hover);
+  --color-primary-ink: var(--primary-ink);
+  --color-primary-tint: var(--primary-tint);
+
+  --color-gold: var(--gold);
+  --color-gold-tint: var(--gold-tint);
+
+  --color-brick: var(--brick);
+  --color-brick-tint: var(--brick-tint);
+
+  --color-line: var(--line);
+  --color-line-strong: var(--line-strong);
+
+  --color-overlay: var(--overlay);
+
+  --font-sans: var(--font-plex-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-plex-mono), ui-monospace, "SF Mono", monospace;
+
+  /* Type scale. Money is the most important thing on every screen, so it
+     gets its own sizes at the top rather than borrowing heading sizes. */
+  --text-money-hero: 3rem;
+  --text-money-hero--line-height: 1.05;
+  --text-money-hero--letter-spacing: -0.02em;
+  --text-money-lg: 1.75rem;
+  --text-money-lg--line-height: 1.1;
+  --text-money-lg--letter-spacing: -0.015em;
+  --text-money: 1.0625rem;
+  --text-money--line-height: 1.2;
+
+  --text-label: 0.6875rem;
+  --text-label--line-height: 1.3;
+  --text-label--letter-spacing: 0.08em;
+}
+
+@layer base {
+  html {
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    background-color: var(--paper);
+    color: var(--ink);
+    font-family: var(--font-plex-sans), ui-sans-serif, system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    /* The tab bar is fixed; iOS Safari needs this to stop rubber-banding
+       from revealing a different colour behind it. */
+    overscroll-behavior-y: none;
+  }
+
+  /* Every number in this app is money or a date. Tabular figures stop
+     digits shifting width as values change, so columns stay aligned. */
+  .tabular {
+    font-family: var(--font-plex-mono), ui-monospace, "SF Mono", monospace;
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: "tnum";
+  }
+
+  /* Visible focus, but only for keyboard users. Part of the quality floor. */
+  :focus-visible {
+    outline: 2px solid var(--primary);
+    outline-offset: 2px;
+    border-radius: 2px;
+  }
+
+  button,
+  a,
+  input,
+  select,
+  textarea {
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  /* 44px minimum touch targets on anything tappable. */
+  button:not(:disabled),
+  a[href] {
+    touch-action: manipulation;
+  }
+}
+
+@layer utilities {
+  .safe-bottom {
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+  .safe-top {
+    padding-top: env(safe-area-inset-top, 0px);
+  }
+  /* Hide the horizontal scrollbar on chip rows without losing the scroll. */
+  .no-scrollbar {
+    scrollbar-width: none;
+  }
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+
+  /* A loading spinner is state, not decoration — freezing it would leave the
+     user staring at a stopped wheel wondering if the app had hung. Slow it
+     down instead of killing it. */
+  .spinner {
+    animation-duration: 1.6s !important;
+    animation-iteration-count: infinite !important;
+  }
+}
