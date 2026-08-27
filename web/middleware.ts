@@ -36,8 +36,14 @@ export const config = {
      *   api/*      — proxied to the Go service by the rewrite; the API does
      *                its own auth and returns a real 401
      *   _next/*    — build output
+     *   sw.js      — the service worker. The browser fetches it with no
+     *                session on a first visit; redirecting it to /login
+     *                would register the login page as the worker script and
+     *                the install would fail outright.
+     *   offline    — the worker precaches this at install time, which also
+     *                happens before anyone has logged in. It holds no data.
      *   static files and the PWA manifest
      */
-    "/((?!api|_next/static|_next/image|favicon.ico|manifest.webmanifest|icons/|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico)$).*)",
+    "/((?!api|_next/static|_next/image|favicon.ico|manifest.webmanifest|sw\\.js|offline|icons/|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico)$).*)",
   ],
 };
