@@ -11,6 +11,8 @@ import (
 func writeError(w http.ResponseWriter, err error) {
 	status := http.StatusInternalServerError
 	switch {
+	case errors.Is(err, domain.ErrIdempotencyConflict):
+		status = http.StatusConflict
 	case errors.Is(err, domain.ErrNotFound):
 		status = http.StatusNotFound
 	case errors.Is(err, domain.ErrInvalidCategory):

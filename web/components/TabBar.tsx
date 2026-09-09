@@ -21,7 +21,7 @@ const TABS = [
   { href: "/more", label: "More", icon: MoreIcon },
 ] as const;
 
-export function TabBar() {
+export function TabBar({ canAdd = true }: { canAdd?: boolean }) {
   const pathname = usePathname();
   const { open } = useAddSheet();
   const tap = useTap();
@@ -31,6 +31,7 @@ export function TabBar() {
       <button
         type="button"
         aria-label="Add expense"
+        disabled={!canAdd}
         {...tap(() => {
           // Reset here, not when the sheet mounts — the sheet mounts *after*
           // this tap, so resetting there would erase the fabTap mark and the
@@ -40,7 +41,7 @@ export function TabBar() {
           mark("fabTap");
           open();
         })}
-        className="fixed bottom-[calc(env(safe-area-inset-bottom,0px)+4.75rem)] right-4 z-30 flex h-14 w-14 items-center justify-center rounded-full bg-primary text-primary-ink shadow-lg active:scale-95"
+        className="fixed bottom-[calc(env(safe-area-inset-bottom,0px)+4.75rem)] right-4 z-30 flex h-14 w-14 items-center justify-center rounded-full bg-primary text-primary-ink shadow-lg active:scale-95 disabled:opacity-40"
       >
         <svg width="26" height="26" viewBox="0 0 24 24" aria-hidden="true">
           <path
@@ -67,6 +68,7 @@ export function TabBar() {
               <li key={tab.href} className="flex-1">
                 <Link
                   href={tab.href}
+                  prefetch={true}
                   aria-current={active ? "page" : undefined}
                   className={`flex min-h-[3.25rem] flex-col items-center justify-center gap-0.5 text-[0.6875rem] ${
                     active ? "font-medium text-primary" : "text-ink-faint"

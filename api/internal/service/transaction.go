@@ -30,6 +30,7 @@ type ListParams struct {
 	MonthStr   *string
 	CategoryID *string
 	Query      *string
+	Kind       *domain.Kind
 	Limit      int
 	Offset     int
 }
@@ -40,14 +41,19 @@ type ListParams struct {
 type ListResult struct {
 	Transactions []domain.Transaction
 	Total        int
+	ExpensePaisa domain.Money
 	Limit        int
 	Offset       int
 }
 
 func (s *TransactionService) List(ctx context.Context, userID string, p ListParams) (ListResult, error) {
+	if p.Kind != nil && *p.Kind != domain.KindExpense && *p.Kind != domain.KindIncome {
+		return ListResult{}, domain.ErrInvalidTransaction
+	}
 	filter := port.TransactionFilter{
 		CategoryID: p.CategoryID,
 		Query:      p.Query,
+		Kind:       p.Kind,
 		Limit:      clampLimit(p.Limit),
 		Offset:     clampOffset(p.Offset),
 	}
@@ -61,11 +67,11 @@ func (s *TransactionService) List(ctx context.Context, userID string, p ListPara
 		filter.To = &next
 	}
 
-	transactions, total, err := s.txRepo.List(ctx, userID, filter)
+	transactions, total, expense, err := s.txRepo.List(ctx, userID, filter)
 	if err != nil {
 		return ListResult{}, fmt.Errorf("listing transactions: %w", err)
 	}
-	return ListResult{Transactions: transactions, Total: total, Limit: filter.Limit, Offset: filter.Offset}, nil
+	return ListResult{Transactions: transactions, Total: total, ExpensePaisa: expense, Limit: filter.Limit, Offset: filter.Offset}, nil
 }
 
 func clampLimit(limit int) int {

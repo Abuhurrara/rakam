@@ -11,12 +11,14 @@ export function WakeScreen({
   onRetry,
   variant = "full",
   message,
+  description,
 }: {
   longWait?: boolean;
   onRetry?: () => void;
   /** "full" replaces the screen; "overlay" floats over mounted content. */
   variant?: "full" | "overlay";
   message?: string;
+  description?: string;
 }) {
   const body = (
     <div className="mx-6 flex max-w-xs flex-col items-center gap-4 rounded-2xl border border-line bg-paper-raised px-7 py-8 text-center">
@@ -28,7 +30,8 @@ export function WakeScreen({
         <p className="text-sm leading-relaxed text-ink-soft">
           {longWait
             ? "Still waking up. On the free tier this can take a minute."
-            : "It sleeps when nobody is using it. This takes a few seconds."}
+            : (description ??
+              "It sleeps when nobody is using it. This takes a few seconds.")}
         </p>
       </div>
       {longWait && onRetry ? (

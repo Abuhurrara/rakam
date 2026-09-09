@@ -13,11 +13,7 @@ import {
 } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { isValidAmountInput, paisaToInputString } from "@/lib/money";
-import {
-  fromKarachiDateInput,
-  karachiDateInputValue,
-  toKarachiRFC3339,
-} from "@/lib/date";
+import { expenseTimestamp, karachiDateInputValue } from "@/lib/date";
 import { orderByMru, pushMru, readMru } from "@/lib/mru";
 import { countTap, mark } from "@/lib/perf";
 import { useTap } from "@/lib/useTap";
@@ -72,7 +68,8 @@ export function AddSheetProvider({ children }: { children: ReactNode }) {
 
 export function useAddSheet(): AddSheetValue {
   const ctx = useContext(AddSheetContext);
-  if (!ctx) throw new Error("useAddSheet must be used inside <AddSheetProvider>");
+  if (!ctx)
+    throw new Error("useAddSheet must be used inside <AddSheetProvider>");
   return ctx;
 }
 
@@ -101,7 +98,11 @@ function Sheet({ mode, onClose }: { mode: Mode; onClose: () => void }) {
 
   const today = karachiDateInputValue(new Date());
   const dateChanged = dateValue !== today;
-  const canSave = isValidAmountInput(amount);
+  const canSave =
+    isValidAmountInput(amount) &&
+    /^\d{4}-\d{2}-\d{2}$/.test(dateValue) &&
+    dateValue <= today;
+  const submitted = useRef(false);
 
   // Most-used first. Read once on open so the row never reshuffles under the
   // user's thumb mid-tap.
@@ -171,32 +172,33 @@ function Sheet({ mode, onClose }: { mode: Mode; onClose: () => void }) {
   }, [closeSheet]);
 
   function handleSave() {
-    if (!canSave) return;
+    if (!canSave || submitted.current) return;
     countTap();
     mark("saveTap");
 
     const trimmed = description.trim();
     const input: TransactionInput = {
-      kind: "expense",
+      kind: editing?.kind ?? "expense",
       // The raw string the user typed. Never parsed here — the API does it.
       amount,
       category_id: categoryId,
       description: trimmed === "" ? null : trimmed,
-      occurred_at: dateChanged
-        ? fromKarachiDateInput(dateValue, new Date())
-        : toKarachiRFC3339(new Date()),
+      occurred_at: expenseTimestamp(
+        dateValue,
+        editing?.occurred_at,
+        new Date(),
+      ),
     };
 
     if (categoryId) pushMru(categoryId);
 
-    // Close first. The save continues in the background and reports itself
-    // through the list row and, if it fails, a persistent toast.
+    // Persist a recoverable draft before closing or starting a network write.
+    const accepted = editing ? update(editing.id, input) : save(input);
+    if (!accepted) return;
+    submitted.current = true;
     closeSheet();
 
-    if (editing) {
-      update(editing.id, input);
-    } else {
-      save(input);
+    if (!editing) {
       // Land the user where the new row appears, so the success signal is
       // always visible without needing a success toast. Queued so the history
       // pop from closeSheet() settles before the router navigates.
@@ -366,7 +368,7 @@ function CategoryChips({
             key={c.id}
             type="button"
             aria-pressed={selected}
-            {...tap(() => onSelect(c.id), { fast: true })}
+            {...tap(() => onSelect(c.id))}
             className={`flex min-h-11 items-center gap-1.5 rounded-full border px-3 text-sm transition-colors ${
               selected
                 ? "border-primary bg-primary-tint font-medium text-ink"

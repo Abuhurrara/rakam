@@ -14,6 +14,7 @@ type TransactionFilter struct {
 	To         *time.Time
 	CategoryID *string
 	Query      *string
+	Kind       *domain.Kind
 	Limit      int
 	Offset     int
 }
@@ -21,9 +22,10 @@ type TransactionFilter struct {
 type TransactionRepo interface {
 	// List returns the page of transactions matching filter along with the
 	// total count of matching rows across all pages.
-	List(ctx context.Context, userID string, filter TransactionFilter) ([]domain.Transaction, int, error)
+	List(ctx context.Context, userID string, filter TransactionFilter) ([]domain.Transaction, int, domain.Money, error)
 	Get(ctx context.Context, userID, id string) (domain.Transaction, error)
 	Create(ctx context.Context, t domain.Transaction) (domain.Transaction, error)
+	CreateIdempotent(ctx context.Context, t domain.Transaction, key string) (domain.Transaction, error)
 	Update(ctx context.Context, t domain.Transaction) (domain.Transaction, error)
 	Delete(ctx context.Context, userID, id string) error
 

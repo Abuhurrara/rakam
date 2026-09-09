@@ -56,6 +56,7 @@ type RequestOptions = {
    */
   skipAuthRedirect?: boolean;
   timeoutMs?: number;
+  idempotencyKey?: string;
 };
 
 /**
@@ -86,7 +87,12 @@ export async function apiFetch<T>(
       signal,
       // The session cookie is httpOnly; this is what sends it.
       credentials: "include",
-      headers: body ? { "Content-Type": "application/json" } : undefined,
+      headers: {
+        ...(body ? { "Content-Type": "application/json" } : {}),
+        ...(opts.idempotencyKey
+          ? { "Idempotency-Key": opts.idempotencyKey }
+          : {}),
+      },
       body: body === undefined ? undefined : JSON.stringify(body),
     });
   } catch (err) {
@@ -165,7 +171,9 @@ export function logout(): Promise<null> {
   return apiFetch<null>("/api/auth/logout", { method: "POST" });
 }
 
-export function me(opts: { skipAuthRedirect?: boolean } = {}): Promise<User> {
+export function me(
+  opts: { skipAuthRedirect?: boolean; signal?: AbortSignal } = {},
+): Promise<User> {
   return apiFetch<User>("/api/auth/me", opts);
 }
 
@@ -196,6 +204,7 @@ export function listTransactions(
   signal?: AbortSignal,
 ): Promise<TransactionList> {
   const params = new URLSearchParams();
+  if (query.kind) params.set("kind", query.kind);
   if (query.month) params.set("month", query.month);
   if (query.category_id) params.set("category_id", query.category_id);
   if (query.q) params.set("q", query.q);
@@ -211,9 +220,11 @@ export function listTransactions(
 
 export function createTransaction(
   input: TransactionInput,
+  idempotencyKey: string,
 ): Promise<Transaction> {
   return apiFetch<Transaction>("/api/transactions", {
     method: "POST",
+    idempotencyKey,
     body: input,
   });
 }

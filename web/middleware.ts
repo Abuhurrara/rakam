@@ -10,7 +10,7 @@ import { NextResponse, type NextRequest } from "next/server";
  *
  * It deliberately does not try to validate the token. That needs the API (or
  * the JWT secret, which has no business being in the web app), and is layer
- * 2's job in app/(app)/layout.tsx.
+ * 2's job in AppShell, before any private content mounts.
  */
 
 const SESSION_COOKIE = "rakam_session";

@@ -31,11 +31,14 @@ func newFakeTransactionRepo() *fakeTransactionRepo {
 // List mirrors the real repo's filtering and its occurred_at desc, id desc
 // tiebreak order closely enough to exercise the service's pagination and
 // month-boundary logic honestly.
-func (f *fakeTransactionRepo) List(ctx context.Context, userID string, filter port.TransactionFilter) ([]domain.Transaction, int, error) {
+func (f *fakeTransactionRepo) List(ctx context.Context, userID string, filter port.TransactionFilter) ([]domain.Transaction, int, domain.Money, error) {
 	f.lastFilter = filter
 
 	var matched []domain.Transaction
 	for _, t := range f.transactions {
+		if filter.Kind != nil && t.Kind != *filter.Kind {
+			continue
+		}
 		if t.UserID != userID {
 			continue
 		}
@@ -70,7 +73,13 @@ func (f *fakeTransactionRepo) List(ctx context.Context, userID string, filter po
 	total := len(matched)
 	start := min(filter.Offset, total)
 	end := min(start+filter.Limit, total)
-	return matched[start:end], total, nil
+	var expense domain.Money
+	for _, t := range matched {
+		if t.Kind == domain.KindExpense {
+			expense += t.AmountPaisa
+		}
+	}
+	return matched[start:end], total, expense, nil
 }
 
 func (f *fakeTransactionRepo) Get(ctx context.Context, userID, id string) (domain.Transaction, error) {
@@ -342,5 +351,54 @@ func TestTransactionService_Delete_NotFoundForOtherUser(t *testing.T) {
 	err := svc.Delete(context.Background(), "user-2", "tx-1")
 	if !errors.Is(err, domain.ErrNotFound) {
 		t.Fatalf("Delete() by wrong user error = %v; want ErrNotFound", err)
+	}
+}
+
+// The database enforces receipts; this fake checks service validation and routing.
+func (f *fakeTransactionRepo) CreateIdempotent(ctx context.Context, tx domain.Transaction, key string) (domain.Transaction, error) {
+	return f.Create(ctx, tx)
+}
+
+func TestTransactionService_IdempotencyKeyValidation(t *testing.T) {
+	for _, tc := range []struct {
+		name, key string
+		wantErr   bool
+	}{
+		{"legacy client", "", false},
+		{"stable key", "9b7f25a1-5035-4e63-9ad5-ef01ce82553a", false},
+		{"short key", "bad", true},
+		{"invalid characters", "invalid key with spaces", true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			repo := newFakeTransactionRepo()
+			svc := NewTransactionService(repo, newFakeCategoryRepo(), time.UTC)
+			_, err := svc.CreateIdempotent(context.Background(), domain.Transaction{UserID: "user-1", Kind: domain.KindExpense, AmountPaisa: 120000, OccurredAt: time.Now()}, tc.key)
+			if errors.Is(err, domain.ErrInvalidTransaction) != tc.wantErr {
+				t.Fatalf("error = %v", err)
+			}
+			if tc.wantErr && len(repo.transactions) != 0 {
+				t.Fatal("invalid request was saved")
+			}
+		})
+	}
+}
+
+func TestTransactionService_TotalBeyondPage(t *testing.T) {
+	for _, tc := range []struct {
+		name          string
+		limit, offset int
+	}{{"first page", 50, 0}, {"last page", 50, 200}, {"empty page", 50, 300}} {
+		t.Run(tc.name, func(t *testing.T) {
+			repo := newFakeTransactionRepo()
+			for i := 0; i < 205; i++ {
+				repo.Create(context.Background(), domain.Transaction{UserID: "u", Kind: domain.KindExpense, AmountPaisa: 100, OccurredAt: time.Now()})
+			}
+			repo.Create(context.Background(), domain.Transaction{UserID: "other", Kind: domain.KindExpense, AmountPaisa: 99999, OccurredAt: time.Now()})
+			svc := NewTransactionService(repo, newFakeCategoryRepo(), time.UTC)
+			got, err := svc.List(context.Background(), "u", ListParams{Limit: tc.limit, Offset: tc.offset})
+			if err != nil || got.Total != 205 || got.ExpensePaisa != 20500 {
+				t.Fatalf("got %+v, %v", got, err)
+			}
+		})
 	}
 }

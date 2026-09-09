@@ -6,7 +6,7 @@ import (
 	"github.com/Abuhurrara/rakam/api/internal/service"
 )
 
-func NewRouter(categorySvc *service.CategoryService, transactionSvc *service.TransactionService, authSvc *service.AuthService, personSvc *service.PersonService, debtSvc *service.DebtService, budgetSvc *service.BudgetService, billSvc *service.RecurringBillService, summarySvc *service.SummaryService, p pinger, jwtSecret []byte) http.Handler {
+func NewRouter(categorySvc *service.CategoryService, transactionSvc *service.TransactionService, authSvc *service.AuthService, personSvc *service.PersonService, debtSvc *service.DebtService, budgetSvc *service.BudgetService, billSvc *service.RecurringBillService, summarySvc *service.SummaryService, exportSvc *service.ExportService, p pinger, jwtSecret []byte) http.Handler {
 	mux := http.NewServeMux()
 
 	mux.HandleFunc("GET /api/health", handleHealth(p))
@@ -42,6 +42,8 @@ func NewRouter(categorySvc *service.CategoryService, transactionSvc *service.Tra
 	mux.Handle("POST /api/bills", requireAuth(jwtSecret, handleCreateBill(billSvc)))
 	mux.Handle("PATCH /api/bills/{id}", requireAuth(jwtSecret, handleUpdateBill(billSvc)))
 	mux.Handle("DELETE /api/bills/{id}", requireAuth(jwtSecret, handleDeleteBill(billSvc)))
+
+	mux.Handle("GET /api/export", requireAuth(jwtSecret, handleExport(exportSvc)))
 
 	mux.Handle("GET /api/summary", requireAuth(jwtSecret, handleSummary(summarySvc)))
 

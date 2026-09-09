@@ -64,11 +64,13 @@ export type TransactionInput = {
 export type TransactionList = {
   transactions: Transaction[];
   total: number;
+  expense_paisa: number;
   limit: number;
   offset: number;
 };
 
 export type TransactionQuery = {
+  kind?: Kind;
   month?: string;
   category_id?: string;
   q?: string;

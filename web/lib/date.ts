@@ -85,6 +85,17 @@ export function fromKarachiDateInput(dateValue: string, now: Date): string {
   return `${dateValue}T${p.hour}:${p.minute}:${p.second}${KARACHI_OFFSET}`;
 }
 
+/** Editing a note or amount must not move the purchase's original time. */
+export function expenseTimestamp(
+  dateValue: string,
+  original: string | undefined,
+  now: Date,
+): string {
+  if (original && dateValue === karachiDateInputValue(new Date(original)))
+    return original;
+  return fromKarachiDateInput(dateValue, original ? new Date(original) : now);
+}
+
 const dayHeaderFormatter = new Intl.DateTimeFormat("en-GB", {
   timeZone: KARACHI,
   weekday: "short",
@@ -100,7 +111,10 @@ const timeFormatter = new Intl.DateTimeFormat("en-GB", {
 });
 
 /** "Today", "Yesterday", or "Sat, 16 Aug" for a day-group header. */
-export function formatDayHeader(dayKey: string, now: Date = new Date()): string {
+export function formatDayHeader(
+  dayKey: string,
+  now: Date = new Date(),
+): string {
   const today = karachiDateInputValue(now);
   if (dayKey === today) return "Today";
 
@@ -109,7 +123,9 @@ export function formatDayHeader(dayKey: string, now: Date = new Date()): string 
 
   // Noon avoids any chance of the parsed instant landing on the wrong side
   // of a day boundary when rendered back in Karachi.
-  return dayHeaderFormatter.format(new Date(`${dayKey}T12:00:00${KARACHI_OFFSET}`));
+  return dayHeaderFormatter.format(
+    new Date(`${dayKey}T12:00:00${KARACHI_OFFSET}`),
+  );
 }
 
 /** "2:30 pm" — the time on a transaction row. */
@@ -142,6 +158,9 @@ export function shiftMonthKey(monthKey: string, delta: number): string {
 }
 
 /** Is this month key in the future relative to now in Karachi? */
-export function isFutureMonth(monthKey: string, now: Date = new Date()): boolean {
+export function isFutureMonth(
+  monthKey: string,
+  now: Date = new Date(),
+): boolean {
   return monthKey > karachiMonthKey(now);
 }

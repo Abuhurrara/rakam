@@ -34,6 +34,7 @@ type transactionResponse struct {
 type listTransactionsResponse struct {
 	Transactions []transactionResponse `json:"transactions"`
 	Total        int                   `json:"total"`
+	ExpensePaisa domain.Money          `json:"expense_paisa"`
 	Limit        int                   `json:"limit"`
 	Offset       int                   `json:"offset"`
 }
@@ -80,6 +81,10 @@ func handleListTransactions(svc *service.TransactionService) http.HandlerFunc {
 		q := r.URL.Query()
 
 		params := service.ListParams{}
+		if kind := q.Get("kind"); kind != "" {
+			k := domain.Kind(kind)
+			params.Kind = &k
+		}
 		if month := q.Get("month"); month != "" {
 			params.MonthStr = &month
 		}
@@ -109,6 +114,7 @@ func handleListTransactions(svc *service.TransactionService) http.HandlerFunc {
 		json.NewEncoder(w).Encode(listTransactionsResponse{
 			Transactions: responses,
 			Total:        result.Total,
+			ExpensePaisa: result.ExpensePaisa,
 			Limit:        result.Limit,
 			Offset:       result.Offset,
 		})
@@ -128,7 +134,7 @@ func handleCreateTransaction(svc *service.TransactionService) http.HandlerFunc {
 			writeError(w, err)
 			return
 		}
-		created, err := svc.Create(r.Context(), t)
+		created, err := svc.CreateIdempotent(r.Context(), t, r.Header.Get("Idempotency-Key"))
 		if err != nil {
 			writeError(w, err)
 			return

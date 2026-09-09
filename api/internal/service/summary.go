@@ -101,7 +101,7 @@ func (s *SummaryService) Get(ctx context.Context, userID, monthStr string) (Summ
 		}
 	}
 
-	recent, _, err := s.txRepo.List(ctx, userID, port.TransactionFilter{Limit: recentTransactionLimit})
+	recent, _, _, err := s.txRepo.List(ctx, userID, port.TransactionFilter{Limit: recentTransactionLimit})
 	if err != nil {
 		return Summary{}, fmt.Errorf("listing recent transactions: %w", err)
 	}

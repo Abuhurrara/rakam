@@ -1,4 +1,5 @@
 import { PhaseStub } from "@/components/PhaseStub";
+import { ExportButton } from "@/components/ExportButton";
 import { SignOutButton } from "@/components/SignOutButton";
 
 export default function MorePage() {
@@ -6,9 +7,10 @@ export default function MorePage() {
     <>
       <PhaseStub
         title="More"
-        summary="Recurring bills with next due dates, categories management, the work log, and a full JSON export."
+        summary="Recurring bill management, category settings and the work log are coming later. You can download your ledger below."
       />
       <div className="px-4">
+        <ExportButton />
         <SignOutButton />
       </div>
     </>

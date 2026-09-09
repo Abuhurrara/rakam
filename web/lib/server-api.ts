@@ -2,7 +2,7 @@ import { headers } from "next/headers";
 import type { User } from "./types";
 
 /**
- * Server-side half of route protection.
+ * Login-page session check. App routes verify in AppShell instead.
  *
  * This runs during rendering, before a single byte of HTML reaches the
  * browser, which is the whole reason there is no login-page flash: the

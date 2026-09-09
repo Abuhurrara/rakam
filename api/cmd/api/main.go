@@ -62,7 +62,9 @@ func main() {
 
 	summarySvc := service.NewSummaryService(transactionRepo, budgetSvc, billSvc, personSvc, loc)
 
-	router := httpapi.NewRouter(categorySvc, transactionSvc, authSvc, personSvc, debtSvc, budgetSvc, billSvc, summarySvc, pool, secret)
+	exportSvc := service.NewExportService(postgres.NewExportRepo(pool))
+
+	router := httpapi.NewRouter(categorySvc, transactionSvc, authSvc, personSvc, debtSvc, budgetSvc, billSvc, summarySvc, exportSvc, pool, secret)
 
 	addr := "0.0.0.0:" + cfg.Port
 	slog.Info("starting server", "addr", addr)

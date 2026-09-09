@@ -19,24 +19,15 @@ import { useSaves, type PendingSave } from "./SavesProvider";
 import { useAddSheet } from "./AddSheet";
 import { Spinner } from "./Spinner";
 
-/** The API's maximum. A real month is far short of this. */
-const PAGE_SIZE = 200;
+const PAGE_SIZE = 50;
 
 type Row =
-  | { kind: "saved"; t: Transaction }
-  | { kind: "pending"; p: PendingSave };
+  { kind: "saved"; t: Transaction } | { kind: "pending"; p: PendingSave };
 
 export function ExpensesScreen() {
   const { byId, expense: expenseCategories } = useCategories();
   const { open } = useAddSheet();
-  const {
-    pending,
-    updating,
-    subscribeCreated,
-    subscribeUpdated,
-    subscribeDeleted,
-    subscribeRestored,
-  } = useSaves();
+  const { pending, updating, revision } = useSaves();
 
   const [month, setMonth] = useState(() => karachiMonthKey(new Date()));
   const [categoryId, setCategoryId] = useState<string | null>(null);
@@ -45,12 +36,17 @@ export function ExpensesScreen() {
 
   const [saved, setSaved] = useState<Transaction[]>([]);
   const [apiTotal, setApiTotal] = useState(0);
+  const [spent, setSpent] = useState<number | null>(null);
+  const [page, setPage] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<ApiError | null>(null);
   const [reloadNonce, setReloadNonce] = useState(0);
 
   useEffect(() => {
-    const id = setTimeout(() => setDebouncedQuery(query.trim()), 300);
+    const id = setTimeout(() => {
+      setDebouncedQuery(query.trim());
+      setPage(0);
+    }, 300);
     return () => clearTimeout(id);
   }, [query]);
 
@@ -59,10 +55,13 @@ export function ExpensesScreen() {
     const controller = new AbortController();
     setLoading(true);
     setError(null);
+    setSpent(null);
 
     listTransactions(
       {
         month,
+        kind: "expense",
+        offset: page * PAGE_SIZE,
         category_id: categoryId ?? undefined,
         q: debouncedQuery || undefined,
         limit: PAGE_SIZE,
@@ -73,11 +72,15 @@ export function ExpensesScreen() {
         if (cancelled) return;
         setSaved(res.transactions);
         setApiTotal(res.total);
+        setSpent(res.expense_paisa);
+        if (page > 0 && res.transactions.length === 0) setPage(0);
       })
       .catch((err: unknown) => {
         // An abort is us changing filters, not a failure worth showing.
         if (cancelled) return;
-        setError(err instanceof ApiError ? err : new ApiError("Failed to load"));
+        setError(
+          err instanceof ApiError ? err : new ApiError("Failed to load"),
+        );
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -87,49 +90,23 @@ export function ExpensesScreen() {
       cancelled = true;
       controller.abort();
     };
-  }, [month, categoryId, debouncedQuery, reloadNonce]);
+  }, [month, categoryId, debouncedQuery, reloadNonce, revision, page]);
 
-  // Keep the list in step with mutations happening elsewhere in the shell.
+  // Every settled mutation reloads the active query instead of inserting a
+  // row into a view whose category, search or month it may no longer match.
+  const expenses = saved;
+
   useEffect(() => {
-    const insert = (t: Transaction) =>
-      setSaved((rows) =>
-        [...rows.filter((r) => r.id !== t.id), t].sort(compareTransactions),
-      );
-
-    const offCreated = subscribeCreated((t) => {
-      if (karachiMonthKey(new Date(t.occurred_at)) === month) insert(t);
-    });
-    const offUpdated = subscribeUpdated(insert);
-    const offRestored = subscribeRestored(insert);
-    const offDeleted = subscribeDeleted((id) =>
-      setSaved((rows) => rows.filter((r) => r.id !== id)),
-    );
-
-    return () => {
-      offCreated();
-      offUpdated();
-      offDeleted();
-      offRestored();
+    const refresh = () => {
+      if (document.visibilityState === "visible") setReloadNonce((n) => n + 1);
     };
-  }, [
-    month,
-    subscribeCreated,
-    subscribeUpdated,
-    subscribeDeleted,
-    subscribeRestored,
-  ]);
-
-  /*
-   * The API has no `kind` filter, so income comes back in the same list. This
-   * screen is Expenses, so income is dropped here and the pinned figure is
-   * labelled "Spent" rather than "Total". (Consequence worth knowing: the
-   * API's `total` counts income too, so the "showing first N" note below is
-   * based on rows fetched, not rows displayed.)
-   */
-  const expenses = useMemo(
-    () => saved.filter((t) => t.kind === "expense"),
-    [saved],
-  );
+    window.addEventListener("online", refresh);
+    document.addEventListener("visibilitychange", refresh);
+    return () => {
+      window.removeEventListener("online", refresh);
+      document.removeEventListener("visibilitychange", refresh);
+    };
+  }, []);
 
   // Only show in-flight saves that belong in the view being looked at.
   const visiblePending = useMemo(
@@ -157,36 +134,31 @@ export function ExpensesScreen() {
     [expenses, visiblePending],
   );
 
-  /*
-   * Summed from raw integer paisa, then formatted by the same function the
-   * rows use, so the total and its rows can never disagree.
-   *
-   * Pending saves are excluded on purpose: an amount that the server has not
-   * accepted yet is not money that has been spent. The total ticking up as a
-   * row solidifies is itself part of the success signal.
-   */
-  const spent = useMemo(
-    () => sumPaisa(expenses.map((t) => t.amount_paisa)),
-    [expenses],
-  );
-
   const filtered = categoryId !== null || debouncedQuery !== "";
-  const truncated = apiTotal > saved.length;
+  const truncated = apiTotal > PAGE_SIZE;
 
   return (
     <div className="px-4 pt-4">
-      <MonthHeader month={month} onChange={setMonth} />
+      <MonthHeader
+        month={month}
+        onChange={(next) => {
+          setMonth(next);
+          setPage(0);
+        }}
+      />
 
       <div className="mt-3 rounded-2xl border border-line bg-paper-raised px-4 py-3.5">
         <p className="text-label uppercase tracking-widest text-ink-faint">
           {filtered ? "Spent, filtered" : "Spent this month"}
         </p>
         <p className="tabular mt-1 text-money-lg font-semibold text-ink">
-          {formatPaisa(spent)}
+          {spent === null ? "—" : formatPaisa(spent)}
         </p>
         {truncated ? (
           <p className="mt-1 text-xs text-ink-faint">
-            Showing the {saved.length} most recent of {apiTotal}.
+            Showing {page * PAGE_SIZE + 1}–
+            {Math.min((page + 1) * PAGE_SIZE, apiTotal)} of {apiTotal}. Total
+            includes all matching expenses.
           </p>
         ) : null}
       </div>
@@ -204,14 +176,20 @@ export function ExpensesScreen() {
         <FilterChip
           label="All"
           active={categoryId === null}
-          onClick={() => setCategoryId(null)}
+          onClick={() => {
+            setCategoryId(null);
+            setPage(0);
+          }}
         />
         {expenseCategories.map((c) => (
           <FilterChip
             key={c.id}
             label={`${c.icon} ${c.name}`}
             active={categoryId === c.id}
-            onClick={() => setCategoryId(categoryId === c.id ? null : c.id)}
+            onClick={() => {
+              setCategoryId(categoryId === c.id ? null : c.id);
+              setPage(0);
+            }}
           />
         ))}
       </div>
@@ -237,6 +215,7 @@ export function ExpensesScreen() {
                 </h2>
                 <span className="tabular text-sm text-ink-faint">
                   {formatPaisa(group.subtotal)}
+                  {truncated ? " shown" : ""}
                 </span>
               </header>
               <ul>
@@ -256,9 +235,7 @@ export function ExpensesScreen() {
                           : "•"
                       }
                       saving={updating.has(row.t.id)}
-                      onEdit={() =>
-                        open({ type: "edit", transaction: row.t })
-                      }
+                      onEdit={() => open({ type: "edit", transaction: row.t })}
                     />
                   ) : (
                     <PendingRow key={row.p.key} pending={row.p} byId={byId} />
@@ -269,19 +246,37 @@ export function ExpensesScreen() {
           ))
         )}
       </div>
+      {!loading && !error && truncated ? (
+        <nav
+          aria-label="Expense pages"
+          className="flex items-center justify-between gap-3 py-4"
+        >
+          <button
+            type="button"
+            disabled={page === 0}
+            onClick={() => setPage((p) => p - 1)}
+            className="min-h-11 rounded-xl border border-line px-4 disabled:opacity-40"
+          >
+            Newer
+          </button>
+          <span className="text-sm">
+            Page {page + 1} of {Math.ceil(apiTotal / PAGE_SIZE)}
+          </span>
+          <button
+            type="button"
+            disabled={(page + 1) * PAGE_SIZE >= apiTotal}
+            onClick={() => setPage((p) => p + 1)}
+            className="min-h-11 rounded-xl border border-line px-4 disabled:opacity-40"
+          >
+            Older
+          </button>
+        </nav>
+      ) : null}
     </div>
   );
 }
 
 /* ------------------------------------------------------------- grouping */
-
-function compareTransactions(a: Transaction, b: Transaction): number {
-  // Mirrors the API's "order by occurred_at desc, id desc".
-  if (a.occurred_at !== b.occurred_at) {
-    return a.occurred_at < b.occurred_at ? 1 : -1;
-  }
-  return a.id < b.id ? 1 : -1;
-}
 
 type DayGroup = { dayKey: string; rows: Row[]; subtotal: number };
 
@@ -298,14 +293,16 @@ function groupByDay(
   };
 
   // Pending first within a day, so a just-saved row is where the eye is.
-  for (const p of pending) push(karachiDayKey(p.input.occurred_at), {
-    kind: "pending",
-    p,
-  });
-  for (const t of transactions) push(karachiDayKey(t.occurred_at), {
-    kind: "saved",
-    t,
-  });
+  for (const p of pending)
+    push(karachiDayKey(p.input.occurred_at), {
+      kind: "pending",
+      p,
+    });
+  for (const t of transactions)
+    push(karachiDayKey(t.occurred_at), {
+      kind: "saved",
+      t,
+    });
 
   return [...byDay.entries()]
     .sort((a, b) => (a[0] < b[0] ? 1 : -1))
@@ -446,7 +443,13 @@ function MonthHeader({
 
 function Chevron({ direction }: { direction: "left" | "right" }) {
   return (
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+    <svg
+      width="20"
+      height="20"
+      viewBox="0 0 24 24"
+      fill="none"
+      aria-hidden="true"
+    >
       <path
         d={direction === "left" ? "m14.5 6-6 6 6 6" : "m9.5 6 6 6-6 6"}
         stroke="currentColor"

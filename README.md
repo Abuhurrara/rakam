@@ -143,14 +143,18 @@ The API sleeps on Render's free tier and can take most of a minute to answer
 its first request. The web app handles this rather than surfacing it as an
 error:
 
-- Every request has a 90 second timeout, so a cold start never fails.
-- `GET /api/health` is called when the app opens. If it has not answered within
-  2 seconds, a "waking up the server" screen appears with a spinner, and polls
-  with backoff until the server answers.
-- The server-side session check has a short 3 second budget. If it is blown,
-  the app treats the session as *provisional*, not as logged out — it shows the
-  waking screen and re-checks against the API before mounting anything that
-  reads data. An unreachable API must never bounce you to the login page.
+- Requests allow up to 90 seconds for a sleeping API to respond.
+- App routes render a static, non-personal shell without a backend request.
+  Middleware redirects missing cookies; AppShell verifies the session in the
+  browser before mounting private screens. API authorization remains mandatory.
+- The session request also wakes the server, removing the health-then-session
+  waterfall. After 2 seconds the shell explains the wait; failures offer retry.
+- The shared shell retains the verified session across tab changes. Tab routes
+  are prefetched and have a loading boundary; expense data loads separately.
+- Only the login page retains the server-side session check (3 second budget).
+  Its form uses a health banner while Render wakes.
+- No authenticated HTML or financial API responses are cached by the service
+  worker. Prefetched app shells contain no user data.
 
 ---
 
@@ -173,12 +177,70 @@ missing, which is deliberate.
 
 ## Known gaps
 
-- **A retried save can duplicate.** If a save times out after the server had
-  already committed it, tapping Retry writes it twice. The API has no
-  idempotency key. Retry is always manual, never automatic, so you are in the
-  loop — but closing this properly needs an idempotency key on
-  `POST /api/transactions`.
-- **Work log and export do not exist yet** on either side. `WorkLogRepo` is in
-  `SPEC.md` but was never built, and there is no `/api/export` handler.
+- **Work log does not exist yet** on either side. `WorkLogRepo` is in
+  `SPEC.md` but was never built. Home, Ledger, Budget and most management screens remain unfinished.
 - Offline writes are out of scope. A mutation that fails offline shows a retry
   toast rather than silently losing the data.
+
+
+## Reliable saves and expense totals
+
+The updated web app sends an `Idempotency-Key` for each new expense. Retries
+reuse the same key and payload. Migration `0003_transaction_requests` stores a
+receipt atomically with the expense, so simultaneous retries create one entry.
+Reusing a key with a different payload returns 409. Receipts survive deletion
+of the expense, so a late retry cannot recreate a deleted record. Older clients
+without a key still work but do not receive duplicate-save protection.
+
+Before making a create/update request, the app persists an account-scoped draft
+on the device. A timeout, reload or expired session keeps it available after
+signing back into the same account. Recovered drafts require manual Retry; they
+are never silently replayed. A successful response removes the draft. Discard
+removes only the local draft, not an expense that may already have reached the
+server. Clearing browser/site storage removes these drafts. If storage is
+unavailable, the entry sheet stays open and no request is started.
+
+Expense lists support `kind=expense`, pages of 50 rows in the UI, and an
+`expense_paisa` total across **all** matching records. The server reads rows,
+count and total in one consistent snapshot. Mutations reload the active query,
+so changing a date, note or category also updates filter membership correctly.
+Editing without a date change preserves the original timestamp.
+
+Deploy in this order: apply migration 0003, deploy the API, then deploy the web
+app. Reopen/reload an existing installed PWA to load the updated keypad. The
+worker does not cache authenticated HTML; no site-data clearing is required.
+
+## Export and recovery
+
+More → Download JSON backup downloads every saved transaction, category
+(including archived), person, debt entry (including settled), budget, recurring
+bill and work log for the signed-in user. `/api/export` returns a versioned JSON
+snapshot with PKR paisa integers preserved exactly. Credentials and internal
+retry receipts are excluded. Unsaved device drafts are not included.
+
+The JSON file is a portable data export; a one-click JSON import is not provided.
+For full database disaster recovery, use PostgreSQL's existing dump/restore tools
+with a custom-format dump, which also preserves schema and retry receipts:
+
+```sh
+pg_dump --format=custom --file=rakam-backup.dump "$DATABASE_URL"
+pg_restore --exit-on-error --no-owner --no-privileges \
+  --dbname="$RESTORE_DATABASE_URL" rakam-backup.dump
+```
+
+`RESTORE_DATABASE_URL` must point to a separate, empty database. Verify counts,
+sign-in and several known expenses there before switching the API to it. Store
+backups privately outside the repository; database dumps contain password hashes.
+Run restore drills periodically rather than treating a download as proof of
+recoverability.
+
+## Regression checks
+
+`cd web && npm run test` exercises keypad activation (including long holds),
+Karachi timestamp preservation, and persistent draft recovery without new test
+dependencies. `npm run check` includes these tests.
+
+Set `TEST_DATABASE_URL` to a disposable migrated PostgreSQL database when running
+`make test`. Database tests verify concurrent save retries, key conflicts,
+user isolation, deletion followed by retry, paginated totals, and export precision.
+Never point tests at a production database.

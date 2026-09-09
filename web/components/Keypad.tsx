@@ -50,19 +50,20 @@ export function Keypad({
   const tap = useTap();
 
   return (
-    <div className="grid grid-cols-3 gap-1.5" role="group" aria-label="Amount keypad">
+    <div
+      className="grid grid-cols-3 gap-1.5"
+      role="group"
+      aria-label="Amount keypad"
+    >
       {KEYS.map((key) => (
         <button
           key={key}
           type="button"
           aria-label={key === "back" ? "Delete last digit" : key}
-          {...tap(
-            () => {
-              countTap();
-              onKey((current) => applyKey(current, key));
-            },
-            { fast: true },
-          )}
+          {...tap(() => {
+            countTap();
+            onKey((current) => applyKey(current, key));
+          })}
           className={`flex h-14 select-none items-center justify-center rounded-xl text-2xl font-medium transition-colors active:bg-paper-sunken ${
             key === "back"
               ? "bg-transparent text-ink-soft"
@@ -78,7 +79,13 @@ export function Keypad({
 
 function BackspaceIcon() {
   return (
-    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+    <svg
+      width="24"
+      height="24"
+      viewBox="0 0 24 24"
+      fill="none"
+      aria-hidden="true"
+    >
       <path
         d="M9 5h11a1 1 0 0 1 1 1v12a1 1 0 0 1-1 1H9l-6-7 6-7Z"
         stroke="currentColor"

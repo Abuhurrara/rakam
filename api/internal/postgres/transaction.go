@@ -42,6 +42,10 @@ func buildTransactionFilter(userID string, filter port.TransactionFilter) (strin
 	args := []any{userID}
 	b.WriteString("where user_id = $1")
 
+	if filter.Kind != nil {
+		args = append(args, *filter.Kind)
+		fmt.Fprintf(&b, " and kind = $%d", len(args))
+	}
 	if filter.From != nil {
 		args = append(args, *filter.From)
 		fmt.Fprintf(&b, " and occurred_at >= $%d", len(args))
@@ -62,12 +66,18 @@ func buildTransactionFilter(userID string, filter port.TransactionFilter) (strin
 	return b.String(), args
 }
 
-func (r *TransactionRepo) List(ctx context.Context, userID string, filter port.TransactionFilter) ([]domain.Transaction, int, error) {
+func (r *TransactionRepo) List(ctx context.Context, userID string, filter port.TransactionFilter) ([]domain.Transaction, int, domain.Money, error) {
 	whereClause, args := buildTransactionFilter(userID, filter)
 
+	tx, err := r.pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.RepeatableRead, AccessMode: pgx.ReadOnly})
+	if err != nil {
+		return nil, 0, 0, fmt.Errorf("beginning list snapshot: %w", err)
+	}
+	defer tx.Rollback(ctx)
 	var total int
-	if err := r.pool.QueryRow(ctx, "select count(*) from transactions "+whereClause, args...).Scan(&total); err != nil {
-		return nil, 0, fmt.Errorf("counting transactions: %w", err)
+	var expense domain.Money
+	if err := tx.QueryRow(ctx, "select count(*), coalesce(sum(amount_paisa) filter (where kind = 'expense'), 0) from transactions "+whereClause, args...).Scan(&total, &expense); err != nil {
+		return nil, 0, 0, fmt.Errorf("counting transactions: %w", err)
 	}
 
 	pageArgs := append(append([]any{}, args...), filter.Limit, filter.Offset)
@@ -79,9 +89,9 @@ func (r *TransactionRepo) List(ctx context.Context, userID string, filter port.T
 		limit $%d offset $%d
 	`, whereClause, len(pageArgs)-1, len(pageArgs))
 
-	rows, err := r.pool.Query(ctx, query, pageArgs...)
+	rows, err := tx.Query(ctx, query, pageArgs...)
 	if err != nil {
-		return nil, 0, fmt.Errorf("querying transactions: %w", err)
+		return nil, 0, 0, fmt.Errorf("querying transactions: %w", err)
 	}
 	defer rows.Close()
 
@@ -89,14 +99,18 @@ func (r *TransactionRepo) List(ctx context.Context, userID string, filter port.T
 	for rows.Next() {
 		var t domain.Transaction
 		if err := rows.Scan(&t.ID, &t.UserID, &t.Kind, &t.AmountPaisa, &t.CategoryID, &t.Description, &t.OccurredAt, &t.RecurringBillID, &t.CreatedAt, &t.UpdatedAt); err != nil {
-			return nil, 0, fmt.Errorf("scanning transaction: %w", err)
+			return nil, 0, 0, fmt.Errorf("scanning transaction: %w", err)
 		}
 		transactions = append(transactions, t)
 	}
 	if err := rows.Err(); err != nil {
-		return nil, 0, fmt.Errorf("iterating transactions: %w", err)
+		return nil, 0, 0, fmt.Errorf("iterating transactions: %w", err)
 	}
-	return transactions, total, nil
+	rows.Close()
+	if err := tx.Commit(ctx); err != nil {
+		return nil, 0, 0, fmt.Errorf("committing list snapshot: %w", err)
+	}
+	return transactions, total, expense, nil
 }
 
 func (r *TransactionRepo) Get(ctx context.Context, userID, id string) (domain.Transaction, error) {

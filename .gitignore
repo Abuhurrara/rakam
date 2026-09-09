@@ -27,3 +27,4 @@ yarn-error.log*
 *.swp
 # Alternate build dir used for verifying without clobbering a running dev server
 .next-*/
+.vercel
