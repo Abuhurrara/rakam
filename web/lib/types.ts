@@ -77,3 +77,38 @@ export type TransactionQuery = {
   limit?: number;
   offset?: number;
 };
+
+/** api/internal/httpapi/bill.go — billResponse */
+export type RecurringBill = {
+  id: string;
+  name: string;
+  amount_paisa: number;
+  category_id: string | null;
+  day_of_month: number;
+  is_active: boolean;
+  last_generated_month: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+/** api/internal/httpapi/summary.go — upcomingBillResponse */
+export type UpcomingBill = {
+  bill: RecurringBill;
+  due_at: string;
+};
+
+/** api/internal/httpapi/summary.go — summaryResponse */
+export type Summary = {
+  month: string;
+  income_paisa: number;
+  expense_paisa: number;
+  net_paisa: number;
+  days_remaining: number;
+  budget_limit_paisa: number;
+  budget_spent_paisa: number;
+  owed_to_me_paisa: number;
+  i_owe_paisa: number;
+  net_owed_paisa: number;
+  upcoming_bills: UpcomingBill[];
+  recent_transactions: Transaction[];
+};

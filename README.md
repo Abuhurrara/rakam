@@ -14,6 +14,31 @@ rakam/
 
 One repo, two deployables.
 
+## Live release — September 9, 2026
+
+- App: [rakam-five.vercel.app](https://rakam-five.vercel.app/)
+- API: [raqam-nrro.onrender.com/api/health](https://raqam-nrro.onrender.com/api/health)
+- Release commit: `1f86a93`; frontend and backend deployed successfully.
+- Database migrations through `0003_transaction_requests` are applied.
+
+This release fixes duplicated keypad input, adds recoverable expense saves and
+JSON export, corrects filtered totals and edit timestamps, and removes backend
+authentication from app-route server rendering.
+
+Live checks passed for all five tabs, entering and saving exactly **1200**, retrying
+a save without duplication, JSON download, API health, and PWA assets. Temporary
+verification entries were removed. Phone-sized browser checks passed with no
+captured browser errors; the installed app on a physical Android phone still
+needs verification. Home, Ledger and Budget remain placeholder screens.
+
+To load the update, close and reopen or reload the installed PWA. Do not clear
+site storage: that would remove any unfinished local drafts.
+
+Neon already runs PostgreSQL. At this release, Render is in Oregon and Neon is
+in Frankfurt. Their distance and free-tier sleep can still delay data requests;
+the navigation fix does not remove those hosting delays. Hosting is unchanged.
+Invite-only accounts remain deferred.
+
 ---
 
 ## What you need
@@ -42,7 +67,7 @@ message naming what is missing:
 
 | Variable | Notes |
 |---|---|
-| `DATABASE_URL` | Neon connection string |
+| `DATABASE_URL` | PostgreSQL connection string (local or Neon) |
 | `JWT_SECRET` | at least 32 bytes — `openssl rand -base64 32` |
 | `PORT` | e.g. `8091` |
 | `SEED_EMAIL` | the one user's email |
@@ -95,8 +120,8 @@ To test on a real phone, put it behind HTTPS (a tunnel such as `ngrok` or
 ## Checks
 
 ```sh
-cd api && make test && go vet ./...
-cd web && npm run check          # tsc --noEmit, eslint, next build
+(cd api && make test && go vet ./...)
+(cd web && npm run check)       # regression tests, TypeScript, ESLint, production build
 ```
 
 ---
@@ -178,14 +203,20 @@ missing, which is deliberate.
 ## Known gaps
 
 - **Work log does not exist yet** on either side. `WorkLogRepo` is in
-  `SPEC.md` but was never built. Home, Ledger, Budget and most management screens remain unfinished.
-- Offline writes are out of scope. A mutation that fails offline shows a retry
-  toast rather than silently losing the data.
+  `SPEC.md` but was never built. Ledger, Budget and most management screens
+  remain unfinished.
+- Full offline editing and automatic background sync are not implemented.
+  Failed create/update requests retain a local draft for manual retry after
+  reconnecting. An offline page load shows the offline fallback.
+- Account invitations, signup and password recovery are not implemented.
 
 
 ## Reliable saves and expense totals
 
-The updated web app sends an `Idempotency-Key` for each new expense. Retries
+The keypad uses one click activation for touch, mouse and keyboard, avoiding
+pointer/click double handling that could duplicate digits on Android.
+
+The web app sends an `Idempotency-Key` for each new expense. Retries
 reuse the same key and payload. Migration `0003_transaction_requests` stores a
 receipt atomically with the expense, so simultaneous retries create one entry.
 Reusing a key with a different payload returns 409. Receipts survive deletion
@@ -206,8 +237,9 @@ count and total in one consistent snapshot. Mutations reload the active query,
 so changing a date, note or category also updates filter membership correctly.
 Editing without a date change preserves the original timestamp.
 
-Deploy in this order: apply migration 0003, deploy the API, then deploy the web
-app. Reopen/reload an existing installed PWA to load the updated keypad. The
+For future releases, apply any pending migrations to the production database,
+deploy the API, then deploy the web app. Migration 0003 is already applied to
+this deployment; do not rerun its SQL manually or reseed existing accounts. Reopen/reload an existing installed PWA to load the updated keypad. The
 worker does not cache authenticated HTML; no site-data clearing is required.
 
 ## Export and recovery
@@ -219,7 +251,7 @@ snapshot with PKR paisa integers preserved exactly. Credentials and internal
 retry receipts are excluded. Unsaved device drafts are not included.
 
 The JSON file is a portable data export; a one-click JSON import is not provided.
-For full database disaster recovery, use PostgreSQL's existing dump/restore tools
+Optional: for full database disaster recovery, use PostgreSQL's dump/restore tools
 with a custom-format dump, which also preserves schema and retry receipts:
 
 ```sh
@@ -227,6 +259,9 @@ pg_dump --format=custom --file=rakam-backup.dump "$DATABASE_URL"
 pg_restore --exit-on-error --no-owner --no-privileges \
   --dbname="$RESTORE_DATABASE_URL" rakam-backup.dump
 ```
+
+Use a `pg_dump` version at least as new as the database server's major version
+(the production server was PostgreSQL 18 at this release).
 
 `RESTORE_DATABASE_URL` must point to a separate, empty database. Verify counts,
 sign-in and several known expenses there before switching the API to it. Store
@@ -237,8 +272,9 @@ recoverability.
 ## Regression checks
 
 `cd web && npm run test` exercises keypad activation (including long holds),
-Karachi timestamp preservation, and persistent draft recovery without new test
-dependencies. `npm run check` includes these tests.
+Karachi timestamp preservation, persistent draft recovery, and rendering each
+app shell without backend requests or mounting private client screens. These
+checks use the existing dependencies. `npm run check` includes these tests.
 
 Set `TEST_DATABASE_URL` to a disposable migrated PostgreSQL database when running
 `make test`. Database tests verify concurrent save retries, key conflicts,

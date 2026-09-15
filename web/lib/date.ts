@@ -146,6 +146,26 @@ export function formatMonthLabel(monthKey: string): string {
   );
 }
 
+const shortDateFormatter = new Intl.DateTimeFormat("en-GB", {
+  timeZone: KARACHI,
+  weekday: "short",
+  day: "numeric",
+  month: "short",
+});
+
+/** "Today", "Tomorrow", or "Wed, 16 Sep" for an API date-only value. */
+export function formatDueDate(dayKey: string, now: Date = new Date()): string {
+  const today = karachiDateInputValue(now);
+  if (dayKey === today) return "Today";
+
+  const tomorrow = karachiDateInputValue(new Date(now.getTime() + 86_400_000));
+  if (dayKey === tomorrow) return "Tomorrow";
+
+  return shortDateFormatter.format(
+    new Date(`${dayKey}T12:00:00${KARACHI_OFFSET}`),
+  );
+}
+
 /** Step a "2026-08" month key by whole months, e.g. -1 -> "2026-07". */
 export function shiftMonthKey(monthKey: string, delta: number): string {
   const [y, m] = monthKey.split("-");

@@ -4,6 +4,7 @@ import type {
   TransactionInput,
   TransactionList,
   TransactionQuery,
+  Summary,
   User,
 } from "./types";
 
@@ -242,4 +243,11 @@ export function updateTransaction(
 
 export function deleteTransaction(id: string): Promise<null> {
   return apiFetch<null>(`/api/transactions/${id}`, { method: "DELETE" });
+}
+
+/* --------------------------------------------------------------- summary */
+
+/** Current Karachi month dashboard. The API resolves the month at request time. */
+export function getSummary(signal?: AbortSignal): Promise<Summary> {
+  return apiFetch<Summary>("/api/summary", { signal });
 }

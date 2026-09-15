@@ -119,9 +119,10 @@ A debt entry is not a transaction. Lending money and spending money are differen
 
 ## API
 
-All routes under `/api`. JSON in, JSON out. Every route except login requires a valid session.
+All routes under `/api`. JSON in, JSON out. Every route except login and health requires a valid session.
 
 ```
+GET    /api/health                  public database connectivity check
 POST   /api/auth/login              email, password → sets cookie
 POST   /api/auth/logout
 GET    /api/auth/me
@@ -131,7 +132,7 @@ POST   /api/categories
 PATCH  /api/categories/{id}
 DELETE /api/categories/{id}          archives, does not hard delete
 
-GET    /api/transactions             ?month=2026-08&category_id=&q=
+GET    /api/transactions             ?kind=expense&month=2026-08&category_id=&q=&limit=50&offset=0
 POST   /api/transactions
 PATCH  /api/transactions/{id}
 DELETE /api/transactions/{id}
@@ -162,6 +163,12 @@ GET    /api/export                   full JSON dump
 ```
 
 Errors return `{ "error": "message" }` with a sensible status. Validation failures are 400 with a message naming the field.
+
+Transaction lists return `transactions`, `total`, `expense_paisa`, `limit` and
+`offset`. The expense total covers all matching records, not just the page.
+New clients send `Idempotency-Key` on transaction creation; an identical retry
+returns the original transaction, while a different payload with the same key
+returns 409. Migration 0003 stores these receipts separately from transactions.
 
 ### Middleware
 
@@ -196,6 +203,19 @@ Set `API_ORIGIN` as a Vercel environment variable and reference it in the rewrit
 Mobile-first. Fixed bottom tab bar: **Home · Expenses · Ledger · Budget · More**. A floating "+" button above the tab bar on every tab opens Add Transaction.
 
 Mostly client components calling the API with `fetch` and `credentials: "include"`. One small typed API client in `lib/api.ts` — no data fetching library.
+
+### Navigation and session verification
+
+App routes render a static, non-personal shell without a server-side API call.
+Next middleware redirects requests with no session cookie; AppShell checks
+`/api/auth/me` in the browser before mounting private client screens or enabling
+entry creation. The shared shell retains the verified session across tab changes.
+The API continues to authenticate every protected request. Only the login page
+uses the bounded server-side session check.
+
+Prefetch tab routes and provide a route loading boundary. Load expense data
+separately from navigation. The session request wakes the backend directly,
+without waiting for an initial health request.
 
 ### The one quality bar that matters
 
@@ -234,9 +254,15 @@ Quality floor, without being asked: responsive to 360px, visible focus rings, `p
 
 ### PWA
 
-`manifest.json` with name "Rakam", theme color, maskable icons at 192 and 512 (generate them). Service worker caching the app shell so it opens instantly and doesn't show a browser error offline. Set `apple-mobile-web-app-capable` and the status bar style.
+`/manifest.webmanifest` defines the name "Rakam", theme color and 192/512 icons.
+The service worker caches static assets and an `/offline` fallback. Financial API
+responses and authenticated HTML remain network-only; opening the installed PWA
+does not guarantee instant data or offline access to the ledger.
 
-Offline writes are out of scope. A mutation that fails offline shows a retry toast rather than silently losing data.
+Before a create/update request, persist an account-scoped local draft. Failed
+requests can be retried manually after reconnecting or signing back in. Never
+silently replay writes. Clearing site storage removes these drafts. Full offline
+editing and automatic background sync remain out of scope.
 
 ---
 
@@ -247,9 +273,17 @@ Web env: `API_ORIGIN`.
 
 Load config once at startup into a struct and fail fast with a clear message if anything required is missing. Provide `.env.example` for both. Include a `Makefile` with `run`, `test`, `migrate-up`, `migrate-down`, `seed`.
 
-`README.md` covers local setup, running migrations, seeding, running both halves, and deploying to Railway plus Vercel plus Neon.
+`README.md` covers local setup, running migrations, seeding, running both halves, and deploying to Render plus Vercel plus Neon.
 
 ---
+
+## Implementation status
+
+The phases below describe the intended product, not a claim that every screen
+is complete. See [README.md](README.md#live-release--september-9-2026) for the
+September 9 release and verified behavior. Home, Expenses and export are
+available; Ledger, Budget, management screens and work-log UI/API remain unfinished.
+Account invitations are deferred.
 
 ## Build phases
 
