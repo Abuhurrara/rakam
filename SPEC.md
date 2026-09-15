@@ -260,7 +260,9 @@ responses and authenticated HTML remain network-only. After session verification
 the app may render a versioned, account-scoped snapshot of previously loaded Home
 and Expenses data while it refreshes from the API. Signing out clears this derived
 snapshot. The snapshot never bypasses authentication and is not a source of truth
-for writes.
+for writes. After the API confirms a transaction create, edit or delete, update
+affected cached Home totals immediately and then revalidate the full summary in
+the background.
 
 Before a create/update request, persist an account-scoped local draft. Failed
 requests can be retried manually after reconnecting or signing back in. Never

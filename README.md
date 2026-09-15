@@ -179,7 +179,10 @@ error:
 - Home and Expenses keep a versioned, account-scoped snapshot after the first
   successful load. Returning to either screen renders that snapshot immediately;
   data older than 30 seconds refreshes without replacing it with a skeleton.
-  Saves invalidate the snapshot, and signing out clears it.
+  A server-confirmed create, edit or delete updates the cached Home totals
+  immediately, then invalidates the snapshot so the full dashboard still
+  reconciles with PostgreSQL in the background. Signing out clears the
+  snapshot.
 - Only the login page retains the server-side session check (3 second budget).
   Its form uses a health banner while Render wakes.
 - No authenticated HTML or financial API responses are cached by the service
