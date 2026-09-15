@@ -25,6 +25,7 @@ import {
   type SaveDraft,
 } from "@/lib/save-drafts";
 import type { Transaction, TransactionInput } from "@/lib/types";
+import { useFinanceData } from "./FinanceDataProvider";
 import { useToast } from "./Toast";
 
 export type PendingSave = { key: string; input: TransactionInput };
@@ -52,6 +53,7 @@ export function SavesProvider({
   const [discarding, setDiscarding] = useState<string | null>(null);
   const inFlight = useRef(new Set<string>());
   const toast = useToast();
+  const financeData = useFinanceData();
 
   useEffect(() => {
     if (!userID) return;
@@ -101,12 +103,13 @@ export function SavesProvider({
         reportAddFlow("failed");
       } finally {
         inFlight.current.delete(draft.key);
+        financeData.invalidate();
         // Reload the current filtered page and server total even after an
         // uncertain response: the write may have committed before disconnecting.
         setRevision((n) => n + 1);
       }
     },
-    [userID],
+    [userID, financeData],
   );
 
   const enqueue = useCallback(
@@ -171,9 +174,12 @@ export function SavesProvider({
             message: "Couldn't delete that expense. Try again from the list.",
           });
         })
-        .finally(() => setRevision((n) => n + 1));
+        .finally(() => {
+          financeData.invalidate();
+          setRevision((n) => n + 1);
+        });
     },
-    [toast],
+    [toast, financeData],
   );
 
   const value = useMemo<SavesValue>(

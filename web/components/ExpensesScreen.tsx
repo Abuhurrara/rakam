@@ -13,11 +13,17 @@ import {
   shiftMonthKey,
 } from "@/lib/date";
 import { friendlyMessage } from "@/lib/useMutation";
-import type { Transaction } from "@/lib/types";
+import { isFresh, transactionQueryKey } from "@/lib/finance-cache";
+import type {
+  Transaction,
+  TransactionList,
+  TransactionQuery,
+} from "@/lib/types";
 import { useCategories } from "./CategoriesProvider";
 import { useSaves, type PendingSave } from "./SavesProvider";
 import { useAddSheet } from "./AddSheet";
 import { Spinner } from "./Spinner";
+import { useFinanceData } from "./FinanceDataProvider";
 
 const PAGE_SIZE = 50;
 
@@ -28,17 +34,34 @@ export function ExpensesScreen() {
   const { byId, expense: expenseCategories } = useCategories();
   const { open } = useAddSheet();
   const { pending, updating, revision } = useSaves();
+  const financeData = useFinanceData();
 
   const [month, setMonth] = useState(() => karachiMonthKey(new Date()));
   const [categoryId, setCategoryId] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [debouncedQuery, setDebouncedQuery] = useState("");
 
-  const [saved, setSaved] = useState<Transaction[]>([]);
-  const [apiTotal, setApiTotal] = useState(0);
-  const [spent, setSpent] = useState<number | null>(null);
   const [page, setPage] = useState(0);
-  const [loading, setLoading] = useState(true);
+  const queryParams = useMemo<TransactionQuery>(
+    () => ({
+      month,
+      kind: "expense",
+      offset: page * PAGE_SIZE,
+      category_id: categoryId ?? undefined,
+      q: debouncedQuery || undefined,
+      limit: PAGE_SIZE,
+    }),
+    [month, page, categoryId, debouncedQuery],
+  );
+  const cacheKey = transactionQueryKey(queryParams);
+  const initialCached = financeData.readTransactions(cacheKey);
+  const [result, setResult] = useState<{
+    key: string;
+    data: TransactionList;
+  } | null>(() =>
+    initialCached ? { key: cacheKey, data: initialCached.data } : null,
+  );
+  const [loading, setLoading] = useState(initialCached === null);
   const [error, setError] = useState<ApiError | null>(null);
   const [reloadNonce, setReloadNonce] = useState(0);
 
@@ -53,26 +76,21 @@ export function ExpensesScreen() {
   useEffect(() => {
     let cancelled = false;
     const controller = new AbortController();
+    const cached = financeData.readTransactions(cacheKey);
+    if (cached) setResult({ key: cacheKey, data: cached.data });
+    if (reloadNonce === 0 && cached && isFresh(cached)) {
+      setLoading(false);
+      setError(null);
+      return () => controller.abort();
+    }
     setLoading(true);
     setError(null);
-    setSpent(null);
 
-    listTransactions(
-      {
-        month,
-        kind: "expense",
-        offset: page * PAGE_SIZE,
-        category_id: categoryId ?? undefined,
-        q: debouncedQuery || undefined,
-        limit: PAGE_SIZE,
-      },
-      controller.signal,
-    )
+    listTransactions(queryParams, controller.signal)
       .then((res) => {
         if (cancelled) return;
-        setSaved(res.transactions);
-        setApiTotal(res.total);
-        setSpent(res.expense_paisa);
+        financeData.writeTransactions(cacheKey, res);
+        setResult({ key: cacheKey, data: res });
         if (page > 0 && res.transactions.length === 0) setPage(0);
       })
       .catch((err: unknown) => {
@@ -90,11 +108,14 @@ export function ExpensesScreen() {
       cancelled = true;
       controller.abort();
     };
-  }, [month, categoryId, debouncedQuery, reloadNonce, revision, page]);
+  }, [cacheKey, queryParams, reloadNonce, revision, page, financeData]);
 
-  // Every settled mutation reloads the active query instead of inserting a
-  // row into a view whose category, search or month it may no longer match.
-  const expenses = saved;
+  const cachedForView = financeData.readTransactions(cacheKey);
+  const data =
+    result?.key === cacheKey ? result.data : (cachedForView?.data ?? null);
+  const expenses = useMemo(() => data?.transactions ?? [], [data]);
+  const apiTotal = data?.total ?? 0;
+  const spent = data?.expense_paisa ?? null;
 
   useEffect(() => {
     const refresh = () => {
@@ -195,9 +216,26 @@ export function ExpensesScreen() {
       </div>
 
       <div className="mt-4" aria-busy={loading}>
-        {loading ? (
+        {data && error ? (
+          <div
+            role="alert"
+            className="mb-4 flex items-center justify-between gap-3 rounded-xl border border-brick/30 bg-brick-tint px-4 py-3"
+          >
+            <p className="text-sm text-brick">
+              {friendlyMessage(error)} Saved data is still shown.
+            </p>
+            <button
+              type="button"
+              onClick={() => setReloadNonce((n) => n + 1)}
+              className="min-h-11 shrink-0 px-2 text-sm font-semibold text-ink"
+            >
+              Retry
+            </button>
+          </div>
+        ) : null}
+        {!data && loading ? (
           <ExpenseListSkeleton />
-        ) : error ? (
+        ) : !data && error ? (
           <ErrorState
             message={friendlyMessage(error)}
             onRetry={() => setReloadNonce((n) => n + 1)}
@@ -244,7 +282,7 @@ export function ExpensesScreen() {
           ))
         )}
       </div>
-      {!loading && !error && truncated ? (
+      {data && truncated ? (
         <nav
           aria-label="Expense pages"
           className="flex items-center justify-between gap-3 py-4"

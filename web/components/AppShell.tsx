@@ -9,6 +9,7 @@ import { AddSheetProvider } from "./AddSheet";
 import { ToastProvider } from "./Toast";
 import { TabBar } from "./TabBar";
 import { WakeScreen } from "./WakeScreen";
+import { FinanceDataProvider } from "./FinanceDataProvider";
 
 // The shared layout keeps this session across tab navigation. No private
 // screen or draft mounts before /auth/me verifies the HttpOnly cookie.
@@ -127,35 +128,37 @@ export function AppShell({ children }: { children: ReactNode }) {
   return (
     <ToastProvider>
       <CategoriesProvider enabled={ready}>
-        <SavesProvider key={userID ?? "waiting"} userID={userID}>
-          <AddSheetProvider>
-            {ready ? (
-              <main className="mx-auto min-h-dvh max-w-lg pb-28">
-                {children}
-              </main>
-            ) : (
-              <main className="mx-auto min-h-dvh max-w-lg">
-                {stuck ? (
-                  <SessionStuck onRetry={retry} />
-                ) : (
-                  <WakeScreen
-                    longWait={longWait}
-                    description={
-                      slow
-                        ? undefined
-                        : "Your account is being checked securely."
-                    }
-                    onRetry={retry}
-                    message={
-                      slow ? "Waking up the server" : "Checking your session"
-                    }
-                  />
-                )}
-              </main>
-            )}
-            <TabBar canAdd={ready} />
-          </AddSheetProvider>
-        </SavesProvider>
+        <FinanceDataProvider key={userID ?? "waiting"} userID={userID}>
+          <SavesProvider key={userID ?? "waiting"} userID={userID}>
+            <AddSheetProvider>
+              {ready ? (
+                <main className="mx-auto min-h-dvh max-w-lg pb-28">
+                  {children}
+                </main>
+              ) : (
+                <main className="mx-auto min-h-dvh max-w-lg">
+                  {stuck ? (
+                    <SessionStuck onRetry={retry} />
+                  ) : (
+                    <WakeScreen
+                      longWait={longWait}
+                      description={
+                        slow
+                          ? undefined
+                          : "Your account is being checked securely."
+                      }
+                      onRetry={retry}
+                      message={
+                        slow ? "Waking up the server" : "Checking your session"
+                      }
+                    />
+                  )}
+                </main>
+              )}
+              <TabBar canAdd={ready} />
+            </AddSheetProvider>
+          </SavesProvider>
+        </FinanceDataProvider>
       </CategoriesProvider>
     </ToastProvider>
   );

@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/Abuhurrara/rakam/api/internal/domain"
@@ -71,15 +72,78 @@ func (s *SummaryService) Get(ctx context.Context, userID, monthStr string) (Summ
 		return Summary{}, err
 	}
 
-	income, expense, err := s.txRepo.SumByKind(ctx, userID, first, next)
-	if err != nil {
-		return Summary{}, fmt.Errorf("summing month transactions: %w", err)
+	// These reads are independent once due bills have been generated. Running
+	// them together avoids adding five database network round trips to the
+	// dashboard's wall time when the API and Postgres are in different regions.
+	readCtx, cancelReads := context.WithCancel(ctx)
+	defer cancelReads()
+	var (
+		income, expense domain.Money
+		budgets         []domain.BudgetWithSpent
+		balances        []domain.PersonBalance
+		recent          []domain.Transaction
+		bills           []domain.RecurringBill
+		reads           sync.WaitGroup
+	)
+	errCh := make(chan error, 5)
+	run := func(read func() error) {
+		reads.Add(1)
+		go func() {
+			defer reads.Done()
+			if err := read(); err != nil {
+				errCh <- err
+				cancelReads()
+			}
+		}()
+	}
+	run(func() error {
+		var err error
+		income, expense, err = s.txRepo.SumByKind(readCtx, userID, first, next)
+		if err != nil {
+			return fmt.Errorf("summing month transactions: %w", err)
+		}
+		return nil
+	})
+	run(func() error {
+		var err error
+		budgets, err = s.budgetSvc.ListForMonth(readCtx, userID, monthStr)
+		if err != nil {
+			return fmt.Errorf("listing budgets: %w", err)
+		}
+		return nil
+	})
+	run(func() error {
+		var err error
+		balances, err = s.personSvc.List(readCtx, userID)
+		if err != nil {
+			return fmt.Errorf("listing people: %w", err)
+		}
+		return nil
+	})
+	run(func() error {
+		var err error
+		recent, _, _, err = s.txRepo.List(readCtx, userID, port.TransactionFilter{Limit: recentTransactionLimit})
+		if err != nil {
+			return fmt.Errorf("listing recent transactions: %w", err)
+		}
+		return nil
+	})
+	run(func() error {
+		var err error
+		bills, err = s.billSvc.List(readCtx, userID)
+		if err != nil {
+			return fmt.Errorf("listing recurring bills: %w", err)
+		}
+		return nil
+	})
+	reads.Wait()
+	close(errCh)
+	for readErr := range errCh {
+		if readErr != nil {
+			return Summary{}, readErr
+		}
 	}
 
-	budgets, err := s.budgetSvc.ListForMonth(ctx, userID, monthStr)
-	if err != nil {
-		return Summary{}, fmt.Errorf("listing budgets: %w", err)
-	}
 	var budgetLimit, budgetSpent domain.Money
 	for _, b := range budgets {
 		if b.Budget != nil {
@@ -88,10 +152,6 @@ func (s *SummaryService) Get(ctx context.Context, userID, monthStr string) (Summ
 		budgetSpent += b.SpentPaisa
 	}
 
-	balances, err := s.personSvc.List(ctx, userID)
-	if err != nil {
-		return Summary{}, fmt.Errorf("listing people: %w", err)
-	}
 	var owedToMe, iOwe domain.Money
 	for _, pb := range balances {
 		if pb.BalancePaisa > 0 {
@@ -101,15 +161,6 @@ func (s *SummaryService) Get(ctx context.Context, userID, monthStr string) (Summ
 		}
 	}
 
-	recent, _, _, err := s.txRepo.List(ctx, userID, port.TransactionFilter{Limit: recentTransactionLimit})
-	if err != nil {
-		return Summary{}, fmt.Errorf("listing recent transactions: %w", err)
-	}
-
-	bills, err := s.billSvc.List(ctx, userID)
-	if err != nil {
-		return Summary{}, fmt.Errorf("listing recurring bills: %w", err)
-	}
 	now := time.Now().In(s.loc)
 	var upcoming []UpcomingBill
 	for _, b := range bills {

@@ -176,10 +176,15 @@ error:
   waterfall. After 2 seconds the shell explains the wait; failures offer retry.
 - The shared shell retains the verified session across tab changes. Tab routes
   are prefetched and have a loading boundary; expense data loads separately.
+- Home and Expenses keep a versioned, account-scoped snapshot after the first
+  successful load. Returning to either screen renders that snapshot immediately;
+  data older than 30 seconds refreshes without replacing it with a skeleton.
+  Saves invalidate the snapshot, and signing out clears it.
 - Only the login page retains the server-side session check (3 second budget).
   Its form uses a health banner while Render wakes.
 - No authenticated HTML or financial API responses are cached by the service
-  worker. Prefetched app shells contain no user data.
+  worker. The verified-session snapshot is managed by the app rather than the
+  worker, so it cannot bypass the authentication gate.
 
 ---
 

@@ -68,37 +68,29 @@ func buildTransactionFilter(userID string, filter port.TransactionFilter) (strin
 
 func (r *TransactionRepo) List(ctx context.Context, userID string, filter port.TransactionFilter) ([]domain.Transaction, int, domain.Money, error) {
 	whereClause, args := buildTransactionFilter(userID, filter)
-
-	tx, err := r.pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.RepeatableRead, AccessMode: pgx.ReadOnly})
-	if err != nil {
-		return nil, 0, 0, fmt.Errorf("beginning list snapshot: %w", err)
-	}
-	defer tx.Rollback(ctx)
-	var total int
-	var expense domain.Money
-	if err := tx.QueryRow(ctx, "select count(*), coalesce(sum(amount_paisa) filter (where kind = 'expense'), 0) from transactions "+whereClause, args...).Scan(&total, &expense); err != nil {
-		return nil, 0, 0, fmt.Errorf("counting transactions: %w", err)
-	}
-
 	pageArgs := append(append([]any{}, args...), filter.Limit, filter.Offset)
 	query := fmt.Sprintf(`
 		select id, user_id, kind, amount_paisa, category_id, description, occurred_at, recurring_bill_id, created_at, updated_at
+		     , count(*) over ()
+		     , coalesce(sum(amount_paisa) filter (where kind = 'expense') over (), 0)
 		from transactions
 		%s
 		order by occurred_at desc, id desc
 		limit $%d offset $%d
 	`, whereClause, len(pageArgs)-1, len(pageArgs))
 
-	rows, err := tx.Query(ctx, query, pageArgs...)
+	rows, err := r.pool.Query(ctx, query, pageArgs...)
 	if err != nil {
 		return nil, 0, 0, fmt.Errorf("querying transactions: %w", err)
 	}
 	defer rows.Close()
 
 	var transactions []domain.Transaction
+	var total int
+	var expense domain.Money
 	for rows.Next() {
 		var t domain.Transaction
-		if err := rows.Scan(&t.ID, &t.UserID, &t.Kind, &t.AmountPaisa, &t.CategoryID, &t.Description, &t.OccurredAt, &t.RecurringBillID, &t.CreatedAt, &t.UpdatedAt); err != nil {
+		if err := rows.Scan(&t.ID, &t.UserID, &t.Kind, &t.AmountPaisa, &t.CategoryID, &t.Description, &t.OccurredAt, &t.RecurringBillID, &t.CreatedAt, &t.UpdatedAt, &total, &expense); err != nil {
 			return nil, 0, 0, fmt.Errorf("scanning transaction: %w", err)
 		}
 		transactions = append(transactions, t)
@@ -106,9 +98,13 @@ func (r *TransactionRepo) List(ctx context.Context, userID string, filter port.T
 	if err := rows.Err(); err != nil {
 		return nil, 0, 0, fmt.Errorf("iterating transactions: %w", err)
 	}
-	rows.Close()
-	if err := tx.Commit(ctx); err != nil {
-		return nil, 0, 0, fmt.Errorf("committing list snapshot: %w", err)
+	// A window aggregate has no row to attach to when the requested page is
+	// empty. Preserve the total used to reset an out-of-range UI page with one
+	// small fallback query. Non-empty pages finish in a single database call.
+	if len(transactions) == 0 {
+		if err := r.pool.QueryRow(ctx, "select count(*), coalesce(sum(amount_paisa) filter (where kind = 'expense'), 0) from transactions "+whereClause, args...).Scan(&total, &expense); err != nil {
+			return nil, 0, 0, fmt.Errorf("counting empty transaction page: %w", err)
+		}
 	}
 	return transactions, total, expense, nil
 }
