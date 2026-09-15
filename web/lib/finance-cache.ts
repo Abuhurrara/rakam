@@ -5,6 +5,7 @@ import type {
   TransactionList,
   TransactionQuery,
 } from "./types";
+import { karachiMonthKey } from "./date";
 
 export const FINANCE_CACHE_FRESH_MS = 30_000;
 const VERSION = 1;
@@ -90,6 +91,90 @@ export function invalidateFinanceCache(cache: FinanceCache): FinanceCache {
       ]),
     ),
   };
+}
+
+/**
+ * Apply a server-confirmed save to the cached dashboard before its background
+ * refresh finishes. `previous === undefined` means create; `null` means an
+ * edit whose old row was not cached, so totals must wait for the server.
+ */
+export function withSavedTransaction(
+  cache: FinanceCache,
+  saved: Transaction,
+  previous: Transaction | null | undefined,
+): FinanceCache {
+  if (!cache.summary) return invalidateFinanceCache(cache);
+  let summary = cache.summary.data;
+  if (previous === undefined) {
+    summary = applyToSummaryTotals(summary, saved, 1);
+  } else if (previous !== null) {
+    summary = applyToSummaryTotals(summary, previous, -1);
+    summary = applyToSummaryTotals(summary, saved, 1);
+  }
+  summary = {
+    ...summary,
+    recent_transactions: upsertRecent(summary.recent_transactions, saved),
+  };
+  return invalidateFinanceCache({
+    ...cache,
+    summary: { data: summary, updatedAt: 0 },
+  });
+}
+
+export function withoutDeletedTransaction(
+  cache: FinanceCache,
+  deleted: Transaction,
+): FinanceCache {
+  if (!cache.summary) return invalidateFinanceCache(cache);
+  const summary = applyToSummaryTotals(cache.summary.data, deleted, -1);
+  return invalidateFinanceCache({
+    ...cache,
+    summary: {
+      data: {
+        ...summary,
+        recent_transactions: summary.recent_transactions.filter(
+          (transaction) => transaction.id !== deleted.id,
+        ),
+      },
+      updatedAt: 0,
+    },
+  });
+}
+
+function applyToSummaryTotals(
+  summary: Summary,
+  transaction: Transaction,
+  direction: 1 | -1,
+): Summary {
+  if (karachiMonthKey(new Date(transaction.occurred_at)) !== summary.month) {
+    return summary;
+  }
+  const amount = transaction.amount_paisa * direction;
+  if (transaction.kind === "income") {
+    return {
+      ...summary,
+      income_paisa: summary.income_paisa + amount,
+      net_paisa: summary.net_paisa + amount,
+    };
+  }
+  return {
+    ...summary,
+    expense_paisa: summary.expense_paisa + amount,
+    net_paisa: summary.net_paisa - amount,
+  };
+}
+
+function upsertRecent(
+  recent: Transaction[],
+  saved: Transaction,
+): Transaction[] {
+  return [...recent.filter((transaction) => transaction.id !== saved.id), saved]
+    .sort((a, b) => {
+      const timeOrder =
+        new Date(b.occurred_at).getTime() - new Date(a.occurred_at).getTime();
+      return timeOrder === 0 ? b.id.localeCompare(a.id) : timeOrder;
+    })
+    .slice(0, 5);
 }
 
 function isFinanceCache(value: unknown): value is FinanceCache {

@@ -78,9 +78,10 @@ export function SavesProvider({
         ),
       );
       try {
-        if (draft.transactionID)
-          await updateTransaction(draft.transactionID, draft.input);
-        else await createTransaction(draft.input, draft.key);
+        const saved = draft.transactionID
+          ? await updateTransaction(draft.transactionID, draft.input)
+          : await createTransaction(draft.input, draft.key);
+        financeData.recordSaved(saved, draft.transactionID);
         // Clear only after a definite server acknowledgement. If storage removal
         // fails, the stable request key still makes a later create retry safe.
         removeDraft(localStorage, userID, draft.key);
@@ -163,6 +164,7 @@ export function SavesProvider({
   const remove = useCallback(
     (t: Transaction) => {
       void deleteTransaction(t.id)
+        .then(() => financeData.recordDeleted(t))
         .catch((err: unknown) => {
           if (
             err instanceof ApiError &&

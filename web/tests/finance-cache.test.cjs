@@ -9,7 +9,9 @@ const {
   isFresh,
   readFinanceCache,
   transactionQueryKey,
+  withSavedTransaction,
   withTransactionEntry,
+  withoutDeletedTransaction,
   writeFinanceCache,
 } = load("lib/finance-cache.ts");
 
@@ -44,6 +46,21 @@ const transactionList = {
   expense_paisa: 12500,
   limit: 50,
   offset: 0,
+};
+
+const summary = {
+  month: "2026-09",
+  income_paisa: 100000,
+  expense_paisa: 25000,
+  net_paisa: 75000,
+  days_remaining: 15,
+  budget_limit_paisa: 200000,
+  budget_spent_paisa: 20000,
+  owed_to_me_paisa: 0,
+  i_owe_paisa: 0,
+  net_owed_paisa: 0,
+  upcoming_bills: [],
+  recent_transactions: transactionList.transactions,
 };
 
 test("finance cache is versioned and isolated by account", () => {
@@ -137,4 +154,39 @@ test("persistent query history is bounded to the twenty newest views", () => {
   assert.equal(Object.keys(cache.transactions).length, 20);
   assert.equal(cache.transactions["page=0"], undefined);
   assert.ok(cache.transactions["page=24"]);
+});
+
+test("server-confirmed create updates the cached Home total immediately", () => {
+  const cache = {
+    ...emptyFinanceCache(),
+    summary: { data: summary, updatedAt: 10_000 },
+  };
+  const saved = {
+    ...transactionList.transactions[0],
+    id: "tx-2",
+    amount_paisa: 5000,
+    occurred_at: "2026-09-15T13:00:00+05:00",
+  };
+  const next = withSavedTransaction(cache, saved, undefined);
+  assert.equal(next.summary.data.expense_paisa, 30000);
+  assert.equal(next.summary.data.net_paisa, 70000);
+  assert.equal(next.summary.data.recent_transactions[0].id, "tx-2");
+  assert.equal(next.summary.updatedAt, 0);
+});
+
+test("edit and delete apply exact deltas before background reconciliation", () => {
+  const cache = {
+    ...emptyFinanceCache(),
+    summary: { data: summary, updatedAt: 10_000 },
+  };
+  const previous = transactionList.transactions[0];
+  const edited = { ...previous, amount_paisa: 15000 };
+  const afterEdit = withSavedTransaction(cache, edited, previous);
+  assert.equal(afterEdit.summary.data.expense_paisa, 27500);
+  assert.equal(afterEdit.summary.data.net_paisa, 72500);
+
+  const afterDelete = withoutDeletedTransaction(afterEdit, edited);
+  assert.equal(afterDelete.summary.data.expense_paisa, 12500);
+  assert.equal(afterDelete.summary.data.net_paisa, 87500);
+  assert.equal(afterDelete.summary.data.recent_transactions.length, 0);
 });
