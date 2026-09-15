@@ -14,17 +14,21 @@ import {
   invalidateFinanceCache,
   readFinanceCache,
   withTransactionEntry,
+  withSavedTransaction,
+  withoutDeletedTransaction,
   writeFinanceCache,
   type CacheEntry,
   type FinanceCache,
 } from "@/lib/finance-cache";
-import type { Summary, TransactionList } from "@/lib/types";
+import type { Summary, Transaction, TransactionList } from "@/lib/types";
 
 type FinanceDataValue = {
   readSummary: () => CacheEntry<Summary> | null;
   writeSummary: (data: Summary) => void;
   readTransactions: (key: string) => CacheEntry<TransactionList> | null;
   writeTransactions: (key: string, data: TransactionList) => void;
+  recordSaved: (saved: Transaction, transactionID?: string) => void;
+  recordDeleted: (deleted: Transaction) => void;
   invalidate: () => void;
   clear: () => void;
 };
@@ -79,6 +83,36 @@ export function FinanceDataProvider({
     () => persist(invalidateFinanceCache(cache.current)),
     [persist],
   );
+  const recordSaved = useCallback(
+    (saved: Transaction, transactionID?: string) => {
+      let previous: Transaction | null | undefined;
+      if (transactionID) {
+        previous = null;
+        for (const entry of Object.values(cache.current.transactions)) {
+          const found = entry.data.transactions.find(
+            (transaction) => transaction.id === transactionID,
+          );
+          if (found) {
+            previous = found;
+            break;
+          }
+        }
+        if (!previous) {
+          previous =
+            cache.current.summary?.data.recent_transactions.find(
+              (transaction) => transaction.id === transactionID,
+            ) ?? null;
+        }
+      }
+      persist(withSavedTransaction(cache.current, saved, previous));
+    },
+    [persist],
+  );
+  const recordDeleted = useCallback(
+    (deleted: Transaction) =>
+      persist(withoutDeletedTransaction(cache.current, deleted)),
+    [persist],
+  );
   const clear = useCallback(() => {
     cache.current = emptyFinanceCache();
     if (!userID) return;
@@ -95,6 +129,8 @@ export function FinanceDataProvider({
       writeSummary,
       readTransactions,
       writeTransactions,
+      recordSaved,
+      recordDeleted,
       invalidate,
       clear,
     }),
@@ -103,6 +139,8 @@ export function FinanceDataProvider({
       writeSummary,
       readTransactions,
       writeTransactions,
+      recordSaved,
+      recordDeleted,
       invalidate,
       clear,
     ],
