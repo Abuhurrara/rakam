@@ -194,11 +194,9 @@ export function ExpensesScreen() {
         ))}
       </div>
 
-      <div className="mt-4">
+      <div className="mt-4" aria-busy={loading}>
         {loading ? (
-          <div className="flex justify-center py-12 text-ink-faint">
-            <Spinner size={24} />
-          </div>
+          <ExpenseListSkeleton />
         ) : error ? (
           <ErrorState
             message={friendlyMessage(error)}
@@ -400,6 +398,42 @@ function PendingRow({
         </span>
       </div>
     </li>
+  );
+}
+
+/** Mirrors the real day group so loading does not collapse the list area. */
+function ExpenseListSkeleton() {
+  return (
+    <div aria-label="Loading expenses">
+      <span className="sr-only" role="status">
+        Loading expenses
+      </span>
+      <div aria-hidden="true" className="animate-pulse">
+        <div className="mb-1.5 flex items-center justify-between border-b border-line pb-2">
+          <div className="h-3.5 w-24 rounded bg-paper-sunken" />
+          <div className="h-3.5 w-20 rounded bg-paper-sunken" />
+        </div>
+        <ul>
+          {Array.from({ length: 5 }, (_, index) => (
+            <li
+              key={index}
+              className="flex min-h-14 items-center gap-3 px-1 py-2"
+            >
+              <span className="h-9 w-9 shrink-0 rounded-full bg-paper-sunken" />
+              <span className="min-w-0 flex-1 space-y-1.5">
+                <span
+                  className={`block h-3.5 rounded bg-paper-sunken ${
+                    index % 2 === 0 ? "w-28" : "w-36"
+                  }`}
+                />
+                <span className="block h-2.5 w-20 rounded bg-paper-sunken" />
+              </span>
+              <span className="h-4 w-20 shrink-0 rounded bg-paper-sunken" />
+            </li>
+          ))}
+        </ul>
+      </div>
+    </div>
   );
 }
 

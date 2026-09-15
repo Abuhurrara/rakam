@@ -9,8 +9,8 @@ import { useAddSheet } from "./AddSheet";
 /**
  * Fixed bottom tab bar with the floating "+" above it, on every tab.
  *
- * Home, Ledger, Budget and More are honest stubs in this phase — the bar is
- * real, its destinations arrive in phase 7.
+ * Ledger, Budget and most of More are still honest stubs — the bar is real
+ * while their destinations arrive through phase 7.
  */
 
 const TABS = [
