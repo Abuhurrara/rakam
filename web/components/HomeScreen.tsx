@@ -12,28 +12,45 @@ import {
 } from "@/lib/date";
 import { budgetState, sortUpcomingBills } from "@/lib/home";
 import { formatPaisa } from "@/lib/money";
+import { isFresh } from "@/lib/finance-cache";
 import type { Summary, Transaction } from "@/lib/types";
 import { friendlyMessage } from "@/lib/useMutation";
 import { useCategories } from "./CategoriesProvider";
 import { useSaves } from "./SavesProvider";
+import { useFinanceData } from "./FinanceDataProvider";
 
 export function HomeScreen() {
   const { byId } = useCategories();
   const { revision } = useSaves();
-  const [summary, setSummary] = useState<Summary | null>(null);
-  const [loading, setLoading] = useState(true);
+  const financeData = useFinanceData();
+  const [summary, setSummary] = useState<Summary | null>(
+    () => financeData.readSummary()?.data ?? null,
+  );
+  const [loading, setLoading] = useState(
+    () => financeData.readSummary() === null,
+  );
   const [error, setError] = useState<ApiError | null>(null);
   const [reloadNonce, setReloadNonce] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
     const controller = new AbortController();
+    const cached = financeData.readSummary();
+    if (cached) setSummary(cached.data);
+    if (reloadNonce === 0 && cached && isFresh(cached)) {
+      setLoading(false);
+      setError(null);
+      return () => controller.abort();
+    }
     setLoading(true);
     setError(null);
 
     getSummary(controller.signal)
       .then((next) => {
-        if (!cancelled) setSummary(next);
+        if (!cancelled) {
+          financeData.writeSummary(next);
+          setSummary(next);
+        }
       })
       .catch((err: unknown) => {
         if (cancelled) return;
@@ -49,7 +66,7 @@ export function HomeScreen() {
       cancelled = true;
       controller.abort();
     };
-  }, [reloadNonce, revision]);
+  }, [reloadNonce, revision, financeData]);
 
   useEffect(() => {
     const refresh = () => {

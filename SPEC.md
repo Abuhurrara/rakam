@@ -256,8 +256,11 @@ Quality floor, without being asked: responsive to 360px, visible focus rings, `p
 
 `/manifest.webmanifest` defines the name "Rakam", theme color and 192/512 icons.
 The service worker caches static assets and an `/offline` fallback. Financial API
-responses and authenticated HTML remain network-only; opening the installed PWA
-does not guarantee instant data or offline access to the ledger.
+responses and authenticated HTML remain network-only. After session verification,
+the app may render a versioned, account-scoped snapshot of previously loaded Home
+and Expenses data while it refreshes from the API. Signing out clears this derived
+snapshot. The snapshot never bypasses authentication and is not a source of truth
+for writes.
 
 Before a create/update request, persist an account-scoped local draft. Failed
 requests can be retried manually after reconnecting or signing back in. Never
