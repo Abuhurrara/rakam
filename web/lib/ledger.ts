@@ -24,6 +24,67 @@ export function splitDebtEntries(entries: readonly DebtEntry[]): {
   return { unsettled, settled };
 }
 
+/** The contribution an entry makes to a person's current net balance. */
+export function debtEntryBalancePaisa(entry: DebtEntry): number {
+  if (entry.settled_at !== null) return 0;
+  return entry.direction === "they_owe"
+    ? entry.amount_paisa
+    : -entry.amount_paisa;
+}
+
+export type LedgerTotalsDelta = {
+  owedToMePaisa: number;
+  iOwePaisa: number;
+};
+
+export function debtEntryTotals(entry: DebtEntry): LedgerTotalsDelta {
+  if (entry.settled_at !== null) {
+    return { owedToMePaisa: 0, iOwePaisa: 0 };
+  }
+  return entry.direction === "they_owe"
+    ? { owedToMePaisa: entry.amount_paisa, iOwePaisa: 0 }
+    : { owedToMePaisa: 0, iOwePaisa: entry.amount_paisa };
+}
+
+export function subtractLedgerTotals(
+  totals: LedgerTotalsDelta,
+): LedgerTotalsDelta {
+  return {
+    owedToMePaisa: -totals.owedToMePaisa,
+    iOwePaisa: -totals.iOwePaisa,
+  };
+}
+
+/**
+ * Replaces server-confirmed debt entries in a list and reports the exact
+ * balance delta. This lets the screen paint a settlement immediately, then
+ * reconcile quietly in the background.
+ */
+export function replaceDebtEntries(
+  entries: readonly DebtEntry[],
+  changed: readonly DebtEntry[],
+): {
+  entries: DebtEntry[];
+  balanceDelta: number;
+  totalsDelta: LedgerTotalsDelta;
+} {
+  const replacements = new Map(changed.map((entry) => [entry.id, entry]));
+  let balanceDelta = 0;
+  const totalsDelta: LedgerTotalsDelta = { owedToMePaisa: 0, iOwePaisa: 0 };
+  const next = entries.map((entry) => {
+    const replacement = replacements.get(entry.id);
+    if (!replacement) return entry;
+    balanceDelta +=
+      debtEntryBalancePaisa(replacement) - debtEntryBalancePaisa(entry);
+    const before = debtEntryTotals(entry);
+    const after = debtEntryTotals(replacement);
+    totalsDelta.owedToMePaisa += after.owedToMePaisa - before.owedToMePaisa;
+    totalsDelta.iOwePaisa += after.iOwePaisa - before.iOwePaisa;
+    return replacement;
+  });
+  return { entries: next, balanceDelta, totalsDelta };
+}
+
 export function categoryKindForDirection(direction: DebtDirection): Kind {
   return direction === "they_owe" ? "income" : "expense";
 }

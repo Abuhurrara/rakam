@@ -4,11 +4,13 @@ import { logout } from "@/lib/api";
 import { friendlyMessage, useMutation } from "@/lib/useMutation";
 import { Spinner } from "./Spinner";
 import { useFinanceData } from "./FinanceDataProvider";
+import { useLedgerData } from "./LedgerDataProvider";
 import { useToast } from "./Toast";
 
 export function SignOutButton() {
   const toast = useToast();
   const financeData = useFinanceData();
+  const ledgerData = useLedgerData();
   const signOut = useMutation(async () => logout());
 
   return (
@@ -19,6 +21,7 @@ export function SignOutButton() {
         const res = await signOut.run(undefined);
         if (res.ok) {
           financeData.clear();
+          ledgerData.clear();
           // A full navigation, so middleware sees the cleared cookie and the
           // in-memory category cache goes with it.
           window.location.href = "/login";

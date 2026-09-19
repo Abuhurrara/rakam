@@ -4,28 +4,46 @@ import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { ApiError, listPeople } from "@/lib/api";
 import { balanceMeta } from "@/lib/ledger";
+import { isLedgerFresh } from "@/lib/ledger-cache";
 import { formatPaisa } from "@/lib/money";
 import { friendlyMessage } from "@/lib/useMutation";
 import type { Person } from "@/lib/types";
 import { AddPersonSheet } from "./LedgerSheets";
+import { useLedgerData } from "./LedgerDataProvider";
 import { Spinner } from "./Spinner";
 
 export function LedgerScreen() {
-  const [people, setPeople] = useState<Person[] | null>(null);
+  const ledgerData = useLedgerData();
+  const [people, setPeople] = useState<Person[] | null>(
+    () => ledgerData.readPeople()?.data ?? null,
+  );
   const [error, setError] = useState<ApiError | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(
+    () => ledgerData.readPeople() === null,
+  );
   const [reloadNonce, setReloadNonce] = useState(0);
   const [addingPerson, setAddingPerson] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
     const controller = new AbortController();
-    setLoading(true);
+    const cached = ledgerData.readPeople();
+    if (cached) setPeople(cached.data);
+    if (reloadNonce === 0 && cached && isLedgerFresh(cached)) {
+      setLoading(false);
+      setError(null);
+      return () => controller.abort();
+    }
+    // Keep stale data visible while the request confirms it in the background.
+    setLoading(cached === null);
     setError(null);
 
     listPeople(controller.signal)
       .then((next) => {
-        if (!cancelled) setPeople(next);
+        if (!cancelled) {
+          ledgerData.writePeople(next);
+          setPeople(next);
+        }
       })
       .catch((err: unknown) => {
         if (!cancelled) {
@@ -40,12 +58,24 @@ export function LedgerScreen() {
       cancelled = true;
       controller.abort();
     };
-  }, [reloadNonce]);
+  }, [reloadNonce, ledgerData]);
 
   const reload = useCallback(() => setReloadNonce((value) => value + 1), []);
 
+  useEffect(() => {
+    const refresh = () => {
+      if (document.visibilityState === "visible") reload();
+    };
+    window.addEventListener("online", refresh);
+    document.addEventListener("visibilitychange", refresh);
+    return () => {
+      window.removeEventListener("online", refresh);
+      document.removeEventListener("visibilitychange", refresh);
+    };
+  }, [reload]);
+
   return (
-    <div className="px-4 pt-4">
+    <div className="px-4 pt-4" aria-busy={loading}>
       <header className="flex items-start justify-between gap-4">
         <div>
           <p className="text-label uppercase tracking-widest text-ink-faint">People</p>
@@ -80,8 +110,11 @@ export function LedgerScreen() {
         open={addingPerson}
         onRequestClose={() => setAddingPerson(false)}
         onCreated={(person) => {
-          setPeople((current) => (current ? [...current, person] : [person]));
-          reload();
+          setPeople((current) => {
+            const next = current ? [...current, person] : [person];
+            ledgerData.writePeople(next);
+            return next;
+          });
         }}
       />
     </div>

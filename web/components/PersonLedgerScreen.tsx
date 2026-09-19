@@ -12,27 +12,49 @@ import {
 } from "@/lib/api";
 import {
   balanceMeta,
+  debtEntryBalancePaisa,
+  debtEntryTotals,
   directionLabel,
+  replaceDebtEntries,
   splitDebtEntries,
+  subtractLedgerTotals,
 } from "@/lib/ledger";
+import { isLedgerFresh } from "@/lib/ledger-cache";
 import { formatDayHeader, formatTime, karachiDayKey } from "@/lib/date";
 import { formatPaisa } from "@/lib/money";
 import { friendlyMessage } from "@/lib/useMutation";
-import type { DebtEntry, Person } from "@/lib/types";
+import type { DebtEntry, Person, Transaction } from "@/lib/types";
 import {
   AddDebtEntrySheet,
   ConfirmDeleteSheet,
   SettleSheet,
 } from "./LedgerSheets";
+import { useLedgerData } from "./LedgerDataProvider";
+import { useFinanceData } from "./FinanceDataProvider";
 import { Spinner } from "./Spinner";
 
 type LoadFailure = ApiError | null;
 
 export function PersonLedgerScreen({ personID }: { personID: string }) {
   const router = useRouter();
-  const [person, setPerson] = useState<Person | null>(null);
-  const [entries, setEntries] = useState<DebtEntry[]>([]);
-  const [loading, setLoading] = useState(true);
+  const ledgerData = useLedgerData();
+  const financeData = useFinanceData();
+  const [person, setPerson] = useState<Person | null>(
+    () =>
+      ledgerData
+        .readPeople()
+        ?.data.find((candidate) => candidate.id === personID) ?? null,
+  );
+  const [entries, setEntries] = useState<DebtEntry[]>(
+    () => ledgerData.readEntries(personID)?.data ?? [],
+  );
+  const [entriesReady, setEntriesReady] = useState(
+    () => ledgerData.readEntries(personID) !== null,
+  );
+  const [loading, setLoading] = useState(() => {
+    const cachedPeople = ledgerData.readPeople()?.data;
+    return !cachedPeople?.some((candidate) => candidate.id === personID);
+  });
   const [notFound, setNotFound] = useState(false);
   const [error, setError] = useState<LoadFailure>(null);
   const [entrySheetOpen, setEntrySheetOpen] = useState(false);
@@ -40,15 +62,65 @@ export function PersonLedgerScreen({ personID }: { personID: string }) {
   const [settleMode, setSettleMode] = useState<"single" | "all">("single");
   const [entryToDelete, setEntryToDelete] = useState<DebtEntry | null>(null);
   const [deletingPerson, setDeletingPerson] = useState(false);
+  const [reloadNonce, setReloadNonce] = useState(0);
+
+  const updateCachedPerson = useCallback(
+    (next: Person) => ledgerData.upsertPerson(next),
+    [ledgerData],
+  );
+
+  const updateBalance = useCallback(
+    (delta: number) => {
+      if (delta === 0 || !person) return;
+      const next = {
+        ...person,
+        balance_paisa: person.balance_paisa + delta,
+      };
+      setPerson(next);
+      updateCachedPerson(next);
+    },
+    [person, updateCachedPerson],
+  );
 
   const load = useCallback(
-    async (signal?: AbortSignal) => {
-      setLoading(true);
+    async (signal?: AbortSignal, force = false) => {
+      const cachedPeople = ledgerData.readPeople();
+      const cachedPerson = cachedPeople?.data.find(
+        (candidate) => candidate.id === personID,
+      );
+      const cachedEntries = ledgerData.readEntries(personID);
+      if (cachedPerson) setPerson(cachedPerson);
+      if (cachedEntries) {
+        setEntries(cachedEntries.data);
+        setEntriesReady(true);
+      }
+      const needsPeople =
+        force || !cachedPerson || !cachedPeople || !isLedgerFresh(cachedPeople);
+      const needsEntries =
+        force || !cachedEntries || !isLedgerFresh(cachedEntries);
+      if (
+        !force &&
+        cachedPerson &&
+        cachedEntries &&
+        !needsPeople &&
+        !needsEntries
+      ) {
+        setLoading(false);
+        setError(null);
+        return;
+      }
+
+      // A cached header remains usable while history is refreshed.
+      setLoading(!cachedPerson);
       setError(null);
       setNotFound(false);
       const [peopleResult, entriesResult] = await Promise.allSettled([
-        listPeople(signal),
-        listDebtEntries(personID, signal),
+        needsPeople
+          ? listPeople(signal)
+          : Promise.resolve(cachedPeople?.data ?? []),
+        needsEntries
+          ? listDebtEntries(personID, signal)
+          : Promise.resolve(cachedEntries?.data ?? []),
       ]);
       if (signal?.aborted) return;
 
@@ -56,6 +128,7 @@ export function PersonLedgerScreen({ personID }: { personID: string }) {
       if (entriesError instanceof ApiError && entriesError.status === 404) {
         setPerson(null);
         setEntries([]);
+        setEntriesReady(false);
         setNotFound(true);
         setLoading(false);
         return;
@@ -76,30 +149,60 @@ export function PersonLedgerScreen({ personID }: { personID: string }) {
       if (!found) {
         setPerson(null);
         setEntries([]);
+        setEntriesReady(false);
         setNotFound(true);
       } else {
+        ledgerData.writePeople(peopleResult.value);
+        ledgerData.writeEntries(personID, entriesResult.value);
         setPerson(found);
         setEntries(entriesResult.value);
+        setEntriesReady(true);
       }
       setLoading(false);
     },
-    [personID],
+    [personID, ledgerData],
   );
 
   useEffect(() => {
     const controller = new AbortController();
     void load(controller.signal);
     return () => controller.abort();
-  }, [load]);
+  }, [load, reloadNonce]);
+
+  useEffect(() => {
+    const refresh = () => {
+      if (document.visibilityState === "visible") {
+        setReloadNonce((value) => value + 1);
+      }
+    };
+    window.addEventListener("online", refresh);
+    document.addEventListener("visibilitychange", refresh);
+    return () => {
+      window.removeEventListener("online", refresh);
+      document.removeEventListener("visibilitychange", refresh);
+    };
+  }, []);
 
   const groups = useMemo(() => splitDebtEntries(entries), [entries]);
   const applyEntriesThenReload = useCallback(
     (changed: DebtEntry[]) => {
-      const replacements = new Map(changed.map((entry) => [entry.id, entry]));
-      setEntries((current) => current.map((entry) => replacements.get(entry.id) ?? entry));
-      void load();
+      const next = replaceDebtEntries(entries, changed);
+      setEntries(next.entries);
+      ledgerData.writeEntries(personID, next.entries);
+      updateBalance(next.balanceDelta);
+      financeData.recordLedgerTotalsDelta(next.totalsDelta);
+      void load(undefined, true);
     },
-    [load],
+    [entries, financeData, ledgerData, load, personID, updateBalance],
+  );
+
+  const applySettlementTransactions = useCallback(
+    (transactions: Transaction[]) => {
+      for (const transaction of transactions) {
+        financeData.recordSaved(transaction);
+      }
+    },
+    [financeData],
   );
 
   if (notFound) return <MissingPerson />;
@@ -152,16 +255,21 @@ export function PersonLedgerScreen({ personID }: { personID: string }) {
 
       {groups.unsettled.length ? <EntrySection title="Outstanding" entries={groups.unsettled} onSettle={(entry) => { setSettleMode("single"); setSettleTarget([entry]); }} onDelete={setEntryToDelete} /> : null}
       {groups.settled.length ? <EntrySection title="Settled" entries={groups.settled} dimmed onSettle={() => undefined} onDelete={setEntryToDelete} /> : null}
-      {!entries.length ? <NoEntries onAdd={() => setEntrySheetOpen(true)} /> : null}
-      {!entries.length ? <button type="button" onClick={() => setDeletingPerson(true)} className="mt-6 min-h-11 w-full rounded-xl border border-brick/40 px-4 text-sm font-semibold text-brick">Delete person</button> : null}
+      {entriesReady && !entries.length ? <NoEntries onAdd={() => setEntrySheetOpen(true)} /> : null}
+      {entriesReady && !entries.length ? <button type="button" onClick={() => setDeletingPerson(true)} className="mt-6 min-h-11 w-full rounded-xl border border-brick/40 px-4 text-sm font-semibold text-brick">Delete person</button> : null}
 
       <AddDebtEntrySheet
         open={entrySheetOpen}
         personID={personID}
         onRequestClose={() => setEntrySheetOpen(false)}
         onCreated={(entry) => {
-          setEntries((current) => [entry, ...current]);
-          void load();
+          const next = [entry, ...entries];
+          setEntries(next);
+          setEntriesReady(true);
+          ledgerData.writeEntries(personID, next);
+          updateBalance(debtEntryBalancePaisa(entry));
+          financeData.recordLedgerTotalsDelta(debtEntryTotals(entry));
+          void load(undefined, true);
         }}
       />
       <SettleSheet
@@ -170,7 +278,10 @@ export function PersonLedgerScreen({ personID }: { personID: string }) {
         mode={settleMode}
         personID={personID}
         onRequestClose={() => setSettleTarget(null)}
-        onSettled={applyEntriesThenReload}
+        onSettled={(changed, transactions) => {
+          applyEntriesThenReload(changed);
+          applySettlementTransactions(transactions);
+        }}
       />
       <ConfirmDeleteSheet
         open={entryToDelete !== null}
@@ -181,8 +292,14 @@ export function PersonLedgerScreen({ personID }: { personID: string }) {
         onConfirm={async () => {
           if (!entryToDelete) return;
           await deleteDebtEntry(entryToDelete.id);
-          setEntries((current) => current.filter((entry) => entry.id !== entryToDelete.id));
-          void load();
+          const next = entries.filter((entry) => entry.id !== entryToDelete.id);
+          setEntries(next);
+          ledgerData.writeEntries(personID, next);
+          updateBalance(-debtEntryBalancePaisa(entryToDelete));
+          financeData.recordLedgerTotalsDelta(
+            subtractLedgerTotals(debtEntryTotals(entryToDelete)),
+          );
+          void load(undefined, true);
         }}
       />
       <ConfirmDeleteSheet
@@ -193,6 +310,7 @@ export function PersonLedgerScreen({ personID }: { personID: string }) {
         onRequestClose={() => setDeletingPerson(false)}
         onConfirm={async () => {
           await deletePerson(personID);
+          ledgerData.removePerson(personID);
           router.replace("/ledger");
         }}
       />

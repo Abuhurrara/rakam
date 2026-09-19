@@ -7,9 +7,19 @@ const {
   balanceMeta,
   categoryKindForDirection,
   commonDirection,
+  debtEntryBalancePaisa,
+  debtEntryTotals,
+  replaceDebtEntries,
   splitDebtEntries,
 } = load('lib/ledger.ts');
 const { createDebtEntry, settleDebtEntry } = load('lib/api.ts');
+const {
+  emptyLedgerCache,
+  isLedgerFresh,
+  readLedgerCache,
+  withEntryList,
+  writeLedgerCache,
+} = load('lib/ledger-cache.ts');
 
 const theyOwe = {
   id: 'one', person_id: 'person', direction: 'they_owe', amount_paisa: 500000,
@@ -17,6 +27,15 @@ const theyOwe = {
   created_at: '', updated_at: '',
 };
 const iOwe = { ...theyOwe, id: 'two', direction: 'i_owe', settled_at: '2026-09-20T12:00:00+05:00' };
+
+function storage() {
+  const map = new Map();
+  return {
+    getItem: (key) => map.get(key) ?? null,
+    setItem: (key, value) => map.set(key, value),
+    removeItem: (key) => map.delete(key),
+  };
+}
 
 for (const tc of [
   { balance: 1, label: 'Owes you', tone: 'owed' },
@@ -31,6 +50,42 @@ test('entries stay partitioned into outstanding then settled history', () => {
     unsettled: [theyOwe],
     settled: [iOwe],
   });
+});
+
+test('server-confirmed settlements update a cached balance without waiting for a refetch', () => {
+  assert.equal(debtEntryBalancePaisa(theyOwe), 500000);
+  assert.equal(debtEntryBalancePaisa(iOwe), 0);
+  const settled = { ...theyOwe, settled_at: '2026-09-20T12:00:00+05:00' };
+  const result = replaceDebtEntries([theyOwe, iOwe], [settled]);
+  assert.deepEqual(result.entries, [settled, iOwe]);
+  assert.equal(result.balanceDelta, -500000);
+  assert.deepEqual(debtEntryTotals(theyOwe), {
+    owedToMePaisa: 500000,
+    iOwePaisa: 0,
+  });
+  assert.deepEqual(result.totalsDelta, {
+    owedToMePaisa: -500000,
+    iOwePaisa: 0,
+  });
+});
+
+test('Ledger cache is account-scoped and a fresh visit skips a repeat loader', () => {
+  const disk = storage();
+  const people = [{
+    id: 'person', name: 'Usman', phone: null, notes: null, balance_paisa: 500000,
+    created_at: '2026-09-19T12:00:00Z', updated_at: '2026-09-19T12:00:00Z',
+  }];
+  const entries = withEntryList(
+    { ...emptyLedgerCache(), people: { data: people, updatedAt: 10_000 } },
+    'person',
+    { data: [theyOwe], updatedAt: 10_000 },
+  );
+  writeLedgerCache(disk, 'alice', entries);
+  const cached = readLedgerCache(disk, 'alice');
+  assert.deepEqual(cached, entries);
+  assert.deepEqual(readLedgerCache(disk, 'bob'), emptyLedgerCache());
+  assert.equal(isLedgerFresh(cached.people, 39_999), true);
+  assert.equal(isLedgerFresh(cached.entries.person, 40_000), false);
 });
 
 test('a settlement category uses the transaction kind for its own direction', () => {
