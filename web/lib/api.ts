@@ -1,5 +1,12 @@
 import type {
   Category,
+  DebtEntry,
+  DebtEntryInput,
+  Person,
+  PersonInput,
+  SettleAllResult,
+  Settlement,
+  SettlementInput,
   Transaction,
   TransactionInput,
   TransactionList,
@@ -196,6 +203,68 @@ export function health(signal?: AbortSignal): Promise<Health> {
 export async function listCategories(): Promise<Category[]> {
   const all = await apiFetch<Category[]>("/api/categories");
   return all.filter((c) => !c.is_archived);
+}
+
+/* -------------------------------------------------------------- ledger */
+
+export function listPeople(signal?: AbortSignal): Promise<Person[]> {
+  return apiFetch<Person[]>("/api/people", { signal });
+}
+
+export function createPerson(input: PersonInput): Promise<Person> {
+  return apiFetch<Person>("/api/people", { method: "POST", body: input });
+}
+
+export function deletePerson(id: string): Promise<null> {
+  return apiFetch<null>(`/api/people/${encodeURIComponent(id)}`, {
+    method: "DELETE",
+  });
+}
+
+export function listDebtEntries(
+  personID: string,
+  signal?: AbortSignal,
+): Promise<DebtEntry[]> {
+  return apiFetch<DebtEntry[]>(
+    `/api/people/${encodeURIComponent(personID)}/entries`,
+    { signal },
+  );
+}
+
+export function createDebtEntry(
+  personID: string,
+  input: DebtEntryInput,
+): Promise<DebtEntry> {
+  return apiFetch<DebtEntry>(
+    `/api/people/${encodeURIComponent(personID)}/entries`,
+    { method: "POST", body: input },
+  );
+}
+
+export function settleDebtEntry(
+  entryID: string,
+  input: SettlementInput,
+): Promise<Settlement> {
+  return apiFetch<Settlement>(
+    `/api/debt-entries/${encodeURIComponent(entryID)}/settle`,
+    { method: "POST", body: input },
+  );
+}
+
+export function settleAllDebtEntries(
+  personID: string,
+  input: SettlementInput,
+): Promise<SettleAllResult> {
+  return apiFetch<SettleAllResult>(
+    `/api/people/${encodeURIComponent(personID)}/settle-all`,
+    { method: "POST", body: input },
+  );
+}
+
+export function deleteDebtEntry(id: string): Promise<null> {
+  return apiFetch<null>(`/api/debt-entries/${encodeURIComponent(id)}`, {
+    method: "DELETE",
+  });
 }
 
 /* ---------------------------------------------------------- transactions */

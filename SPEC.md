@@ -4,7 +4,7 @@ A private expense and lend/borrow ledger. Go API, Postgres, Next.js PWA frontend
 
 Single user. Currency is Pakistani Rupee (PKR). Timezone is Asia/Karachi.
 
-Build in the phases at the end. Each phase must end with something that runs and is verified — no stubs carried forward.
+Build in the phases at the end. Each completed phase must end with something that runs and is verified — no stubs carried forward within that completed phase.
 
 ---
 
@@ -79,17 +79,22 @@ Repository tests are optional; if written, use a real Postgres and skip when `TE
 
 ## Money
 
-Stored and transported as **int64 paisa**. Never float, never a decimal string in business logic.
+Stored as **int64 paisa**. Never float, never a decimal string in business logic.
 
 In `domain`, define `type Money int64` with methods `Rupees() float64` and `String() string` producing `Rs 12,852`. Parsing from user input lives in one place and handles both `"12852"` and `"12852.50"`.
 
-The API sends and receives paisa as a JSON number. The web client formats for display and converts on input. Never do arithmetic on the formatted string.
+The wire contract is deliberately asymmetric: create and update requests send
+the raw decimal rupee string a person typed in `amount` (for example,
+`"12852.50"`), and the API parses it at the boundary. Responses send every
+money field as an integer `*_paisa` JSON number. The web client formats only
+those response integers for display and never does arithmetic on formatted
+strings.
 
 ---
 
 ## Data model
 
-All tables: `id uuid primary key default gen_random_uuid()`, `user_id uuid not null references users(id) on delete cascade`, `created_at timestamptz not null default now()`, `updated_at timestamptz not null default now()`.
+Every user-owned table: `id uuid primary key default gen_random_uuid()`, `user_id uuid not null references users(id) on delete cascade`, `created_at timestamptz not null default now()`, `updated_at timestamptz not null default now()`. The `users` table is the exception: it has no `user_id`.
 
 **`users`** — `email` unique, `password_hash`, `name`. Exactly one row, created by a seed command, never by a signup endpoint.
 
@@ -111,7 +116,7 @@ A debt entry is not a transaction. Lending money and spending money are differen
 
 **`budgets`** — `category_id` uuid, `month` date (always the 1st), `limit_paisa` bigint. Unique `(user_id, category_id, month)`.
 
-**`recurring_bills`** — `name`, `amount_paisa` bigint, `category_id` uuid, `day_of_month` int 1–31, `is_active` bool, `last_generated_month` date null.
+**`recurring_bills`** — `name`, `amount_paisa` bigint, `category_id` uuid null, `day_of_month` int 1–31, `is_active` bool, `last_generated_month` date null.
 
 **`work_logs`** — `month` date (always the 1st), `content` text (markdown). Unique `(user_id, month)`.
 
@@ -139,10 +144,11 @@ DELETE /api/transactions/{id}
 
 GET    /api/people                   includes net balance per person
 POST   /api/people
+DELETE /api/people/{id}              only when the person has no debt history
 GET    /api/people/{id}/entries
 POST   /api/people/{id}/entries
-POST   /api/debt-entries/{id}/settle    body: { create_transaction: bool }
-POST   /api/people/{id}/settle-all
+POST   /api/debt-entries/{id}/settle    body: { create_transaction: bool, category_id?: string }
+POST   /api/people/{id}/settle-all      same optional body
 DELETE /api/debt-entries/{id}
 
 GET    /api/budgets                  ?month=2026-08, includes spent per category
@@ -287,8 +293,8 @@ Load config once at startup into a struct and fail fast with a clear message if 
 The phases below describe the intended product, not a claim that every screen
 is complete. See [README.md](README.md#live-release--september-9-2026) for the
 September 9 release and verified behavior. Home, Expenses and export are
-available; Ledger, Budget, management screens and work-log UI/API remain unfinished.
-Account invitations are deferred.
+available; Ledger, Budget, recurring-bill/category management, and work-log
+UI/API remain unfinished. Account invitations are deferred.
 
 ## Build phases
 

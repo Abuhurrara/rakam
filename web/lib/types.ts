@@ -78,6 +78,61 @@ export type TransactionQuery = {
   offset?: number;
 };
 
+/** api/internal/httpapi/person.go — personResponse */
+export type Person = {
+  id: string;
+  name: string;
+  phone: string | null;
+  notes: string | null;
+  balance_paisa: number;
+  created_at: string;
+  updated_at: string;
+};
+
+export type PersonInput = {
+  name: string;
+  phone: string | null;
+  notes: string | null;
+};
+
+/** api/internal/httpapi/debt.go — debtEntryResponse */
+export type DebtDirection = "i_owe" | "they_owe";
+
+export type DebtEntry = {
+  id: string;
+  person_id: string;
+  direction: DebtDirection;
+  amount_paisa: number;
+  description: string;
+  incurred_at: string;
+  settled_at: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+/** `amount` is the raw decimal string; the API parses it into paisa. */
+export type DebtEntryInput = {
+  direction: DebtDirection;
+  amount: string;
+  description: string;
+  incurred_at: string;
+};
+
+export type SettlementInput = {
+  create_transaction: boolean;
+  category_id?: string | null;
+};
+
+export type Settlement = {
+  debt_entry: DebtEntry;
+  transaction: Transaction | null;
+};
+
+export type SettleAllResult = {
+  debt_entries: DebtEntry[];
+  transactions: Transaction[];
+};
+
 /** api/internal/httpapi/bill.go — billResponse */
 export type RecurringBill = {
   id: string;
