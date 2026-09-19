@@ -13,6 +13,7 @@ import {
   emptyFinanceCache,
   invalidateFinanceCache,
   readFinanceCache,
+  withLedgerTotalsDelta,
   withTransactionEntry,
   withSavedTransaction,
   withoutDeletedTransaction,
@@ -20,6 +21,7 @@ import {
   type CacheEntry,
   type FinanceCache,
 } from "@/lib/finance-cache";
+import type { LedgerTotalsDelta } from "@/lib/ledger";
 import type { Summary, Transaction, TransactionList } from "@/lib/types";
 
 type FinanceDataValue = {
@@ -29,6 +31,7 @@ type FinanceDataValue = {
   writeTransactions: (key: string, data: TransactionList) => void;
   recordSaved: (saved: Transaction, transactionID?: string) => void;
   recordDeleted: (deleted: Transaction) => void;
+  recordLedgerTotalsDelta: (totalsDelta: LedgerTotalsDelta) => void;
   invalidate: () => void;
   clear: () => void;
 };
@@ -113,6 +116,11 @@ export function FinanceDataProvider({
       persist(withoutDeletedTransaction(cache.current, deleted)),
     [persist],
   );
+  const recordLedgerTotalsDelta = useCallback(
+    (totalsDelta: LedgerTotalsDelta) =>
+      persist(withLedgerTotalsDelta(cache.current, totalsDelta)),
+    [persist],
+  );
   const clear = useCallback(() => {
     cache.current = emptyFinanceCache();
     if (!userID) return;
@@ -131,6 +139,7 @@ export function FinanceDataProvider({
       writeTransactions,
       recordSaved,
       recordDeleted,
+      recordLedgerTotalsDelta,
       invalidate,
       clear,
     }),
@@ -141,6 +150,7 @@ export function FinanceDataProvider({
       writeTransactions,
       recordSaved,
       recordDeleted,
+      recordLedgerTotalsDelta,
       invalidate,
       clear,
     ],

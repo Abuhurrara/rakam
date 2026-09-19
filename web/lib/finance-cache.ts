@@ -6,6 +6,7 @@ import type {
   TransactionQuery,
 } from "./types";
 import { karachiMonthKey } from "./date";
+import type { LedgerTotalsDelta } from "./ledger";
 
 export const FINANCE_CACHE_FRESH_MS = 30_000;
 const VERSION = 1;
@@ -135,6 +136,40 @@ export function withoutDeletedTransaction(
         recent_transactions: summary.recent_transactions.filter(
           (transaction) => transaction.id !== deleted.id,
         ),
+      },
+      updatedAt: 0,
+    },
+  });
+}
+
+/**
+ * A debt entry changes the "money on the street" totals without changing an
+ * expense or income total. Apply the server-confirmed delta immediately, then
+ * reconcile Summary in the background.
+ */
+export function withLedgerTotalsDelta(
+  cache: FinanceCache,
+  totalsDelta: LedgerTotalsDelta,
+): FinanceCache {
+  if (
+    !cache.summary ||
+    (totalsDelta.owedToMePaisa === 0 && totalsDelta.iOwePaisa === 0)
+  ) {
+    return cache;
+  }
+  const summary = cache.summary.data;
+  return invalidateFinanceCache({
+    ...cache,
+    summary: {
+      data: {
+        ...summary,
+        owed_to_me_paisa:
+          summary.owed_to_me_paisa + totalsDelta.owedToMePaisa,
+        i_owe_paisa: summary.i_owe_paisa + totalsDelta.iOwePaisa,
+        net_owed_paisa:
+          summary.net_owed_paisa +
+          totalsDelta.owedToMePaisa -
+          totalsDelta.iOwePaisa,
       },
       updatedAt: 0,
     },

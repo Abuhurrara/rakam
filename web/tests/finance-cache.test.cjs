@@ -9,6 +9,7 @@ const {
   isFresh,
   readFinanceCache,
   transactionQueryKey,
+  withLedgerTotalsDelta,
   withSavedTransaction,
   withTransactionEntry,
   withoutDeletedTransaction,
@@ -189,4 +190,35 @@ test("edit and delete apply exact deltas before background reconciliation", () =
   assert.equal(afterDelete.summary.data.expense_paisa, 12500);
   assert.equal(afterDelete.summary.data.net_paisa, 87500);
   assert.equal(afterDelete.summary.data.recent_transactions.length, 0);
+});
+
+test("Ledger changes update the exact money-on-the-street total before revalidation", () => {
+  const cache = {
+    ...emptyFinanceCache(),
+    summary: { data: summary, updatedAt: 10_000 },
+  };
+  const afterLend = withLedgerTotalsDelta(cache, {
+    owedToMePaisa: 5000,
+    iOwePaisa: 0,
+  });
+  assert.equal(afterLend.summary.data.owed_to_me_paisa, 5000);
+  assert.equal(afterLend.summary.data.i_owe_paisa, 0);
+  assert.equal(afterLend.summary.data.net_owed_paisa, 5000);
+  assert.equal(afterLend.summary.updatedAt, 0);
+
+  const afterBorrow = withLedgerTotalsDelta(afterLend, {
+    owedToMePaisa: 0,
+    iOwePaisa: 2000,
+  });
+  assert.equal(afterBorrow.summary.data.owed_to_me_paisa, 5000);
+  assert.equal(afterBorrow.summary.data.i_owe_paisa, 2000);
+  assert.equal(afterBorrow.summary.data.net_owed_paisa, 3000);
+
+  const afterSettlement = withLedgerTotalsDelta(afterBorrow, {
+    owedToMePaisa: -5000,
+    iOwePaisa: 0,
+  });
+  assert.equal(afterSettlement.summary.data.owed_to_me_paisa, 0);
+  assert.equal(afterSettlement.summary.data.i_owe_paisa, 2000);
+  assert.equal(afterSettlement.summary.data.net_owed_paisa, -2000);
 });

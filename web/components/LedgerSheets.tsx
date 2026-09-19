@@ -33,6 +33,7 @@ import type {
   SettleAllResult,
   Settlement,
   SettlementInput,
+  Transaction,
 } from "@/lib/types";
 import { useCategories } from "./CategoriesProvider";
 
@@ -323,7 +324,7 @@ export function SettleSheet({
   mode: "single" | "all";
   personID: string;
   onRequestClose: () => void;
-  onSettled: (entries: DebtEntry[]) => void;
+  onSettled: (entries: DebtEntry[], transactions: Transaction[]) => void;
 }) {
   const [recordMovement, setRecordMovement] = useState(false);
   const [categoryID, setCategoryID] = useState<string | null>(null);
@@ -364,7 +365,18 @@ export function SettleSheet({
       mode === "single"
         ? (result.data as Settlement).debt_entry
         : (result.data as SettleAllResult).debt_entries;
-    onSettled(Array.isArray(settled) ? settled : [settled]);
+    const transactions =
+      mode === "single"
+        ? (result.data as Settlement).transaction
+        : (result.data as SettleAllResult).transactions;
+    onSettled(
+      Array.isArray(settled) ? settled : [settled],
+      Array.isArray(transactions)
+        ? transactions
+        : transactions
+          ? [transactions]
+          : [],
+    );
     onRequestClose();
   }
 
