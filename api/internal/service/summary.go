@@ -148,8 +148,8 @@ func (s *SummaryService) Get(ctx context.Context, userID, monthStr string) (Summ
 	for _, b := range budgets {
 		if b.Budget != nil {
 			budgetLimit += b.Budget.LimitPaisa
+			budgetSpent += b.SpentPaisa
 		}
-		budgetSpent += b.SpentPaisa
 	}
 
 	var owedToMe, iOwe domain.Money

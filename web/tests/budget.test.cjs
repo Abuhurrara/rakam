@@ -7,7 +7,7 @@ const { shiftMonthKey, isFutureMonth } = load('lib/date.ts');
 const { budgetState } = load('lib/home.ts');
 const {
   emptyFinanceCache, isFresh, invalidateFinanceCache, readFinanceCache,
-  withBudgetMonth, withBudgetChange, withSavedTransaction, writeFinanceCache,
+  withBudgetMonth, withBudgetChange, withSavedTransaction, withoutDeletedTransaction, writeFinanceCache,
 } = load('lib/finance-cache.ts');
 
 const category = {
@@ -21,7 +21,7 @@ const budget = {
 const rows = [{ category, budget: null, spent_paisa: 25000 }];
 const summary = {
   month: '2026-09', income_paisa: 0, expense_paisa: 40000, net_paisa: -40000,
-  days_remaining: 7, budget_limit_paisa: 0, budget_spent_paisa: 40000,
+  days_remaining: 7, budget_limit_paisa: 0, budget_spent_paisa: 0,
   owed_to_me_paisa: 0, i_owe_paisa: 0, net_owed_paisa: 0,
   upcoming_bills: [], recent_transactions: [],
 };
@@ -57,8 +57,9 @@ test('budget snapshots are account scoped, month keyed, and keep older finance s
   assert.equal(isFresh(cache.budgets['2026-09'], 39999), true);
   assert.equal(invalidateFinanceCache(cache).budgets['2026-09'].updatedAt, 0);
 
-  disk.setItem('rakam.finance.v1.alice', JSON.stringify({ version: 1, summary: null, transactions: {} }));
-  assert.deepEqual(readFinanceCache(disk, 'alice').budgets, undefined);
+  const oldDisk = storage();
+  oldDisk.setItem('rakam.finance.v1.alice', JSON.stringify({ version: 1, summary: null, transactions: {} }));
+  assert.deepEqual(readFinanceCache(oldDisk, 'alice').budgets, {});
 });
 
 test('confirmed save, edit, and remove update Budget and Home without another GET', () => {
@@ -67,15 +68,39 @@ test('confirmed save, edit, and remove update Budget and Home without another GE
   cache = withBudgetChange(cache, '2026-09', 'food', budget);
   assert.equal(cache.budgets['2026-09'].data[0].budget.id, 'budget-1');
   assert.equal(cache.summary.data.budget_limit_paisa, 100000);
-  assert.equal(cache.summary.data.budget_spent_paisa, 40000);
+  assert.equal(cache.summary.data.budget_spent_paisa, 25000);
   assert.equal(cache.summary.updatedAt, 0);
 
   cache = withBudgetChange(cache, '2026-09', 'food', { ...budget, limit_paisa: 150000 });
   assert.equal(cache.summary.data.budget_limit_paisa, 150000);
+  assert.equal(cache.summary.data.budget_spent_paisa, 25000);
   cache = withBudgetChange(cache, '2026-09', 'food', null);
   assert.equal(cache.summary.data.budget_limit_paisa, 0);
+  assert.equal(cache.summary.data.budget_spent_paisa, 0);
   assert.equal(cache.budgets['2026-09'].data[0].budget, null);
   assert.equal(cache.budgets['2026-09'].updatedAt, 0);
+});
+
+test('confirmed expense changes update budgeted spending but not unbudgeted spending', () => {
+  const budgetedRows = [{ ...rows[0], budget }];
+  const expense = {
+    id: 'food-tx', kind: 'expense', amount_paisa: 500,
+    category_id: 'food', description: null,
+    occurred_at: '2026-09-23T12:00:00+05:00', recurring_bill_id: null,
+    created_at: '', updated_at: '',
+  };
+  let cache = withBudgetMonth({ ...emptyFinanceCache(), summary: {
+    data: { ...summary, budget_limit_paisa: 100000, budget_spent_paisa: 25000 }, updatedAt: 10000,
+  } }, '2026-09', { data: budgetedRows, updatedAt: 10000 });
+  cache = withSavedTransaction(cache, expense, undefined);
+  assert.equal(cache.summary.data.budget_spent_paisa, 25500);
+  const edited = { ...expense, amount_paisa: 700 };
+  cache = withSavedTransaction(cache, edited, expense);
+  assert.equal(cache.summary.data.budget_spent_paisa, 25700);
+  cache = withoutDeletedTransaction(cache, edited);
+  assert.equal(cache.summary.data.budget_spent_paisa, 25000);
+  cache = withSavedTransaction(cache, { ...expense, id: 'travel-tx', category_id: 'travel' }, undefined);
+  assert.equal(cache.summary.data.budget_spent_paisa, 25000);
 });
 
 test('an expense save invalidates cached spending for every month', () => {

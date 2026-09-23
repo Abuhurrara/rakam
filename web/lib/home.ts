@@ -3,6 +3,7 @@ import type { UpcomingBill } from "./types";
 export type BudgetState = {
   percent: number;
   visualPercent: number;
+  overPaisa: number;
   tone: "primary" | "gold" | "brick";
 };
 
@@ -12,13 +13,14 @@ export function budgetState(
   limitPaisa: number,
 ): BudgetState {
   if (limitPaisa <= 0) {
-    return { percent: 0, visualPercent: 0, tone: "primary" };
+    return { percent: 0, visualPercent: 0, overPaisa: 0, tone: "primary" };
   }
 
   const percent = Math.round((spentPaisa * 100) / limitPaisa);
   return {
     percent,
     visualPercent: Math.min(100, Math.max(0, percent)),
+    overPaisa: Math.max(0, spentPaisa - limitPaisa),
     tone:
       spentPaisa > limitPaisa
         ? "brick"

@@ -69,6 +69,51 @@ func TestSummaryService_Get_ComputesIncomeExpenseNet(t *testing.T) {
 	}
 }
 
+func TestSummaryService_Get_BudgetProgressExcludesCategoriesWithoutLimits(t *testing.T) {
+	for _, tc := range []struct {
+		name            string
+		foodHasLimit    bool
+		wantBudgetLimit domain.Money
+		wantBudgetSpent domain.Money
+	}{
+		{name: "only food has a limit", foodHasLimit: true, wantBudgetLimit: 100000, wantBudgetSpent: 125000},
+		{name: "no categories have a limit", wantBudgetLimit: 0, wantBudgetSpent: 0},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			svc, txRepo, budgetRepo, _, _, catRepo := newTestSummaryService(t)
+			const userID = "user-1"
+			loc := testKarachiLoc(t)
+			food, _ := catRepo.Create(context.Background(), domain.Category{UserID: userID, Name: "Food", Kind: domain.KindExpense})
+			travel, _ := catRepo.Create(context.Background(), domain.Category{UserID: userID, Name: "Travel", Kind: domain.KindExpense})
+			month := time.Date(2025, time.August, 1, 0, 0, 0, 0, loc)
+			var foodBudget *domain.Budget
+			if tc.foodHasLimit {
+				foodBudget = &domain.Budget{UserID: userID, CategoryID: food.ID, Month: month, LimitPaisa: 100000}
+			}
+			budgetRepo.listRows = []domain.BudgetWithSpent{
+				{Category: food, Budget: foodBudget, SpentPaisa: 125000},
+				{Category: travel, SpentPaisa: 200000},
+			}
+			txRepo.Create(context.Background(), domain.Transaction{UserID: userID, Kind: domain.KindExpense, AmountPaisa: 125000, CategoryID: &food.ID, OccurredAt: month.AddDate(0, 0, 15)})
+			txRepo.Create(context.Background(), domain.Transaction{UserID: userID, Kind: domain.KindExpense, AmountPaisa: 200000, CategoryID: &travel.ID, OccurredAt: month.AddDate(0, 0, 15)})
+
+			summary, err := svc.Get(context.Background(), userID, "2025-08")
+			if err != nil {
+				t.Fatalf("Get() error = %v", err)
+			}
+			if summary.ExpensePaisa != 325000 {
+				t.Errorf("ExpensePaisa = %d; want 325000", summary.ExpensePaisa)
+			}
+			if summary.BudgetLimitPaisa != tc.wantBudgetLimit {
+				t.Errorf("BudgetLimitPaisa = %d; want %d", summary.BudgetLimitPaisa, tc.wantBudgetLimit)
+			}
+			if summary.BudgetSpentPaisa != tc.wantBudgetSpent {
+				t.Errorf("BudgetSpentPaisa = %d; want %d", summary.BudgetSpentPaisa, tc.wantBudgetSpent)
+			}
+		})
+	}
+}
+
 func TestSummaryService_Get_MoneyOnTheStreet(t *testing.T) {
 	svc, _, _, _, personRepo, _ := newTestSummaryService(t)
 	const userID = "user-1"

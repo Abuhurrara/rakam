@@ -83,6 +83,20 @@ test("finance cache is versioned and isolated by account", () => {
   assert.deepEqual(readFinanceCache(disk, "alice"), emptyFinanceCache());
 });
 
+test("old finance snapshots keep lists but discard the obsolete budget summary", () => {
+  const disk = storage();
+  disk.setItem("rakam.finance.v1.alice", JSON.stringify({
+    ...emptyFinanceCache(), version: 1, summary: { data: summary, updatedAt: 10_000 },
+    transactions: { old: { data: transactionList, updatedAt: 10_000 } },
+  }));
+  const migrated = readFinanceCache(disk, "alice");
+  assert.equal(migrated.version, 2);
+  assert.equal(migrated.summary, null);
+  assert.deepEqual(migrated.transactions.old.data, transactionList);
+  clearFinanceCache(disk, "alice");
+  assert.equal(disk.getItem("rakam.finance.v1.alice"), null);
+});
+
 test("invalid cached financial data is ignored instead of reaching the UI", () => {
   const disk = storage();
   disk.setItem("rakam.finance.v1.alice", "{broken");

@@ -9,26 +9,31 @@ test("budget progress uses the warning thresholds and caps its visual width", ()
   assert.deepEqual(budgetState(0, 0), {
     percent: 0,
     visualPercent: 0,
+    overPaisa: 0,
     tone: "primary",
   });
   assert.deepEqual(budgetState(79_000, 100_000), {
     percent: 79,
     visualPercent: 79,
+    overPaisa: 0,
     tone: "primary",
   });
   assert.deepEqual(budgetState(80_000, 100_000), {
     percent: 80,
     visualPercent: 80,
+    overPaisa: 0,
     tone: "gold",
   });
   assert.deepEqual(budgetState(100_000, 100_000), {
     percent: 100,
     visualPercent: 100,
+    overPaisa: 0,
     tone: "gold",
   });
   assert.deepEqual(budgetState(125_000, 100_000), {
     percent: 125,
     visualPercent: 100,
+    overPaisa: 25000,
     tone: "brick",
   });
 });

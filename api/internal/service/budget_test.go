@@ -13,8 +13,9 @@ import (
 )
 
 type fakeBudgetRepo struct {
-	budgets map[string]domain.Budget
-	nextID  int
+	budgets  map[string]domain.Budget
+	nextID   int
+	listRows []domain.BudgetWithSpent
 }
 
 func newFakeBudgetRepo() *fakeBudgetRepo {
@@ -22,6 +23,9 @@ func newFakeBudgetRepo() *fakeBudgetRepo {
 }
 
 func (f *fakeBudgetRepo) ListWithSpent(ctx context.Context, userID string, month time.Time) ([]domain.BudgetWithSpent, error) {
+	if f.listRows != nil {
+		return f.listRows, nil
+	}
 	var result []domain.BudgetWithSpent
 	for _, b := range f.budgets {
 		if b.UserID != userID || !b.Month.Equal(month) {

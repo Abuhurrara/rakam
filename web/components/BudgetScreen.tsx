@@ -167,15 +167,17 @@ export function BudgetScreen() {
 
 function BudgetOverview({ rows }: { rows: BudgetWithSpent[] }) {
   const limit = sumPaisa(rows.map((row) => row.budget?.limit_paisa ?? 0));
-  const spent = sumPaisa(rows.map((row) => row.spent_paisa));
+  const spent = sumPaisa(rows.filter((row) => row.budget !== null).map((row) => row.spent_paisa));
+  const unbudgetedSpent = sumPaisa(rows.filter((row) => row.budget === null).map((row) => row.spent_paisa));
   const state = budgetState(spent, limit);
   return (
     <section className="mt-5 rounded-2xl border border-line bg-paper-raised px-4 py-4" aria-label="Budget overview">
-      <p className="text-label uppercase tracking-widest text-ink-faint">Monthly spending</p>
-      <p className="tabular mt-1 text-money-lg font-semibold">{formatPaisa(spent)}</p>
+      <p className="text-label uppercase tracking-widest text-ink-faint">{limit > 0 ? "Budgeted spending" : "Spending in listed categories"}</p>
+      <p className="tabular mt-1 text-money-lg font-semibold">{formatPaisa(limit > 0 ? spent : unbudgetedSpent)}</p>
       <p className="mt-1 text-sm text-ink-soft">{limit ? `spent of ${formatPaisa(limit)}` : "No limits set for this month"}</p>
+      {limit > 0 && unbudgetedSpent > 0 ? <p className="mt-1 text-xs text-ink-faint">{formatPaisa(unbudgetedSpent)} spent in categories without limits</p> : null}
       {limit > 0 ? <Progress spent={spent} limit={limit} label="All budget limits used"
-        percent={state.percent} width={state.visualPercent} tone={state.tone} /> : null}
+        percent={state.percent} overPaisa={state.overPaisa} width={state.visualPercent} tone={state.tone} /> : null}
     </section>
   );
 }
@@ -220,7 +222,7 @@ function BudgetGroup(props: GroupProps) {
                 ) : null}
               </div>
               {row.budget && state ? <Progress spent={row.spent_paisa} limit={row.budget.limit_paisa}
-                label={`${row.category.name} budget used`} percent={state.percent} width={state.visualPercent} tone={state.tone} /> : null}
+                label={`${row.category.name} budget used`} percent={state.percent} overPaisa={state.overPaisa} width={state.visualPercent} tone={state.tone} /> : null}
               {props.editingID === row.category.id ? (
                 <form onSubmit={(event) => props.onSubmit(event, row.category.id)} className="mt-4 border-t border-line pt-4">
                   <label htmlFor={`budget-${row.category.id}`} className="block text-sm font-medium text-ink">Monthly limit in rupees</label>
@@ -253,10 +255,11 @@ function BudgetGroup(props: GroupProps) {
   );
 }
 
-function Progress({ spent, limit, percent, width, tone, label }: {
+function Progress({ spent, limit, percent, overPaisa, width, tone, label }: {
   spent: number;
   limit: number;
   percent: number;
+  overPaisa: number;
   width: number;
   tone: "primary" | "gold" | "brick";
   label: string;
@@ -265,9 +268,11 @@ function Progress({ spent, limit, percent, width, tone, label }: {
   const textTone = { primary: "text-primary", gold: "text-gold", brick: "text-brick" }[tone];
   return (
     <div className="mt-3">
-      <div className="flex justify-end"><span className={`tabular text-xs font-semibold ${textTone}`}>{percent}%</span></div>
+      <div className="flex justify-end"><span className={`tabular text-xs font-semibold ${textTone}`}>{overPaisa > 0 ? `${formatPaisa(overPaisa)} over` : `${percent}%`}</span></div>
       <div role="progressbar" aria-label={label} aria-valuemin={0} aria-valuemax={100}
-        aria-valuenow={width} aria-valuetext={`${percent}% used: ${formatPaisa(spent)} of ${formatPaisa(limit)}`}
+        aria-valuenow={width} aria-valuetext={overPaisa > 0
+          ? `${formatPaisa(overPaisa)} over limit: ${formatPaisa(spent)} of ${formatPaisa(limit)}`
+          : `${percent}% used: ${formatPaisa(spent)} of ${formatPaisa(limit)}`}
         className="mt-1 h-2 overflow-hidden rounded-full bg-paper-sunken">
         <div className={`h-full rounded-full ${barTone}`} style={{ width: `${width}%` }} />
       </div>

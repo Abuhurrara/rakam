@@ -242,7 +242,7 @@ If a feature slows that flow, it goes elsewhere in the app.
 
 **Ledger** — people list with net balance per row, green when they owe me, red when I owe them. Tap into a person for their history, unsettled first and settled below dimmed, with per-entry settle and a settle-all action. Add entries and add people from here.
 
-**Budget** — current month, one row per category with a limit: name, spent over limit, progress bar. Amber past 80%, red past 100%. Categories without a limit listed below with their spend. Tap to set or edit inline. Month switcher for reviewing past months.
+**Budget** — current month, one row per category with a limit: name, spent over limit, progress bar. Amber at 80%, red above 100%. An over-limit bar stays full and shows the exact rupees over instead of a percentage above 100. Overall budget progress includes spending only in categories with limits; spending in other categories remains visible separately. Categories without a limit are listed below with their spend. Tap to set or edit inline. Month switcher for reviewing past months.
 
 **Work log** — replaces the monthly notes I keep in Notion, which is too heavy for the job. A plain vertical list of months, newest first: "March 2026", "February 2026", "January 2026", each tappable, each showing how many bullets it holds. Months with no entry yet still appear for the current year, dimmed. Tapping opens a full-screen markdown editor for that month. It must feel like a notes app, not a form — no save button, autosave on a short debounce with a quiet "saved" indicator, Enter continues the bullet list, rendered markdown when unfocused. Include a copy-as-markdown action.
 
@@ -293,8 +293,8 @@ Load config once at startup into a struct and fail fast with a clear message if 
 The phases below describe the intended product, not a claim that every screen
 is complete. See [README.md](README.md#live-release--september-9-2026) for the
 September 9 release and verified behavior. Home, Expenses and export are
-available; Ledger is now available as well. The Budget screen is implemented
-in the current code, with production deployment not yet verified.
+available; Ledger and Budget are now available as well. The Budget overage
+change in the current code has not yet been deployed.
 Recurring-bill/category management and work-log UI/API remain unfinished.
 Account invitations are deferred.
 
