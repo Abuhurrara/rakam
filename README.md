@@ -29,7 +29,13 @@ Live checks passed for all five tabs, entering and saving exactly **1200**, retr
 a save without duplication, JSON download, API health, and PWA assets. Temporary
 verification entries were removed. Phone-sized browser checks passed with no
 captured browser errors; the installed app on a physical Android phone still
-needs verification. Home, Ledger and Budget remain placeholder screens.
+needs verification. At that release, Home, Ledger and Budget were placeholder
+screens.
+
+Since then, Home, Expenses and Ledger have been implemented and deployed.
+Ledger keeps an account-scoped local snapshot so returning to its list or a
+person's history renders immediately, then refreshes stale data quietly in the
+background. Budget and the management areas in More are still placeholders.
 
 To load the update, close and reopen or reload the installed PWA. Do not clear
 site storage: that would remove any unfinished local drafts.
@@ -211,8 +217,8 @@ missing, which is deliberate.
 ## Known gaps
 
 - **Work log does not exist yet** on either side. `WorkLogRepo` is in
-  `SPEC.md` but was never built. Ledger, Budget and most management screens
-  remain unfinished.
+  `SPEC.md` but was never built. Budget and the recurring-bill/category
+  management screens remain unfinished.
 - Full offline editing and automatic background sync are not implemented.
   Failed create/update requests retain a local draft for manual retry after
   reconnecting. An offline page load shows the offline fallback.
