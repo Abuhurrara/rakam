@@ -13,6 +13,8 @@ import {
   emptyFinanceCache,
   invalidateFinanceCache,
   readFinanceCache,
+  withBudgetChange,
+  withBudgetMonth,
   withLedgerTotalsDelta,
   withTransactionEntry,
   withSavedTransaction,
@@ -22,13 +24,16 @@ import {
   type FinanceCache,
 } from "@/lib/finance-cache";
 import type { LedgerTotalsDelta } from "@/lib/ledger";
-import type { Summary, Transaction, TransactionList } from "@/lib/types";
+import type { Budget, BudgetWithSpent, Summary, Transaction, TransactionList } from "@/lib/types";
 
 type FinanceDataValue = {
   readSummary: () => CacheEntry<Summary> | null;
   writeSummary: (data: Summary) => void;
   readTransactions: (key: string) => CacheEntry<TransactionList> | null;
   writeTransactions: (key: string, data: TransactionList) => void;
+  readBudgets: (month: string) => CacheEntry<BudgetWithSpent[]> | null;
+  writeBudgets: (month: string, data: BudgetWithSpent[]) => void;
+  recordBudgetChange: (month: string, categoryID: string, budget: Budget | null) => void;
   recordSaved: (saved: Transaction, transactionID?: string) => void;
   recordDeleted: (deleted: Transaction) => void;
   recordLedgerTotalsDelta: (totalsDelta: LedgerTotalsDelta) => void;
@@ -80,6 +85,23 @@ export function FinanceDataProvider({
           updatedAt: Date.now(),
         }),
       ),
+    [persist],
+  );
+  const readBudgets = useCallback(
+    (month: string) => cache.current.budgets?.[month] ?? null,
+    [],
+  );
+  const writeBudgets = useCallback(
+    (month: string, data: BudgetWithSpent[]) =>
+      persist(withBudgetMonth(cache.current, month, {
+        data,
+        updatedAt: Date.now(),
+      })),
+    [persist],
+  );
+  const recordBudgetChange = useCallback(
+    (month: string, categoryID: string, budget: Budget | null) =>
+      persist(withBudgetChange(cache.current, month, categoryID, budget)),
     [persist],
   );
   const invalidate = useCallback(
@@ -137,6 +159,9 @@ export function FinanceDataProvider({
       writeSummary,
       readTransactions,
       writeTransactions,
+      readBudgets,
+      writeBudgets,
+      recordBudgetChange,
       recordSaved,
       recordDeleted,
       recordLedgerTotalsDelta,
@@ -148,6 +173,9 @@ export function FinanceDataProvider({
       writeSummary,
       readTransactions,
       writeTransactions,
+      readBudgets,
+      writeBudgets,
+      recordBudgetChange,
       recordSaved,
       recordDeleted,
       recordLedgerTotalsDelta,

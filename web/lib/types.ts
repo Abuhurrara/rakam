@@ -133,6 +133,30 @@ export type SettleAllResult = {
   transactions: Transaction[];
 };
 
+/** api/internal/httpapi/budget.go — budgetResponse */
+export type Budget = {
+  id: string;
+  category_id: string;
+  month: string;
+  limit_paisa: number;
+  created_at: string;
+  updated_at: string;
+};
+
+/** api/internal/httpapi/budget.go — budgetWithSpentResponse */
+export type BudgetWithSpent = {
+  category: Category;
+  budget: Budget | null;
+  spent_paisa: number;
+};
+
+/** `limit` remains the raw decimal string typed by the user. */
+export type BudgetInput = {
+  category_id: string;
+  month: string;
+  limit: string;
+};
+
 /** api/internal/httpapi/bill.go — billResponse */
 export type RecurringBill = {
   id: string;

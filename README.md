@@ -35,7 +35,10 @@ screens.
 Since then, Home, Expenses and Ledger have been implemented and deployed.
 Ledger keeps an account-scoped local snapshot so returning to its list or a
 person's history renders immediately, then refreshes stale data quietly in the
-background. Budget and the management areas in More are still placeholders.
+background. The Budget screen is implemented in the current code but has not
+been deployed as part of that release. It shows the current Karachi month,
+supports past-month limits, and keeps account-scoped month snapshots visible
+while refreshing. The management areas in More are still placeholders.
 
 To load the update, close and reopen or reload the installed PWA. Do not clear
 site storage: that would remove any unfinished local drafts.
@@ -217,8 +220,8 @@ missing, which is deliberate.
 ## Known gaps
 
 - **Work log does not exist yet** on either side. `WorkLogRepo` is in
-  `SPEC.md` but was never built. Budget and the recurring-bill/category
-  management screens remain unfinished.
+  `SPEC.md` but was never built. Recurring-bill/category management screens
+  remain unfinished. Budget deployment still needs verification after merge.
 - Full offline editing and automatic background sync are not implemented.
   Failed create/update requests retain a local draft for manual retry after
   reconnecting. An offline page load shows the offline fallback.
