@@ -1,4 +1,7 @@
 import type {
+  Budget,
+  BudgetInput,
+  BudgetWithSpent,
   Category,
   DebtEntry,
   DebtEntryInput,
@@ -263,6 +266,28 @@ export function settleAllDebtEntries(
 
 export function deleteDebtEntry(id: string): Promise<null> {
   return apiFetch<null>(`/api/debt-entries/${encodeURIComponent(id)}`, {
+    method: "DELETE",
+  });
+}
+
+/* -------------------------------------------------------------- budgets */
+
+export function listBudgets(
+  month: string,
+  signal?: AbortSignal,
+): Promise<BudgetWithSpent[]> {
+  return apiFetch<BudgetWithSpent[]>(
+    `/api/budgets?month=${encodeURIComponent(month)}`,
+    { signal },
+  );
+}
+
+export function upsertBudget(input: BudgetInput): Promise<Budget> {
+  return apiFetch<Budget>("/api/budgets", { method: "PUT", body: input });
+}
+
+export function deleteBudget(id: string): Promise<null> {
+  return apiFetch<null>(`/api/budgets/${encodeURIComponent(id)}`, {
     method: "DELETE",
   });
 }

@@ -1,4 +1,7 @@
 import type {
+  Budget,
+  BudgetWithSpent,
+  Category,
   RecurringBill,
   Summary,
   Transaction,
@@ -11,6 +14,7 @@ import type { LedgerTotalsDelta } from "./ledger";
 export const FINANCE_CACHE_FRESH_MS = 30_000;
 const VERSION = 1;
 const MAX_TRANSACTION_QUERIES = 20;
+const MAX_BUDGET_MONTHS = 12;
 const storageKey = (userID: string) => `rakam.finance.v${VERSION}.${userID}`;
 
 export type CacheEntry<T> = { data: T; updatedAt: number };
@@ -18,10 +22,12 @@ export type FinanceCache = {
   version: 1;
   summary: CacheEntry<Summary> | null;
   transactions: Record<string, CacheEntry<TransactionList>>;
+  // Optional so snapshots written before the Budget screen remain readable.
+  budgets?: Record<string, CacheEntry<BudgetWithSpent[]>>;
 };
 
 export function emptyFinanceCache(): FinanceCache {
-  return { version: VERSION, summary: null, transactions: {} };
+  return { version: VERSION, summary: null, transactions: {}, budgets: {} };
 }
 
 export function readFinanceCache(
@@ -81,6 +87,61 @@ export function withTransactionEntry(
   return { ...cache, transactions };
 }
 
+export function withBudgetMonth(
+  cache: FinanceCache,
+  month: string,
+  entry: CacheEntry<BudgetWithSpent[]>,
+): FinanceCache {
+  const budgets = { ...cache.budgets, [month]: entry };
+  const months = Object.keys(budgets);
+  if (months.length > MAX_BUDGET_MONTHS) {
+    months
+      .sort((a, b) => budgets[a].updatedAt - budgets[b].updatedAt)
+      .slice(0, months.length - MAX_BUDGET_MONTHS)
+      .forEach((oldest) => delete budgets[oldest]);
+  }
+  return { ...cache, budgets };
+}
+
+/** Apply an acknowledged limit change to Budget and the Home card at once. */
+export function withBudgetChange(
+  cache: FinanceCache,
+  month: string,
+  categoryID: string,
+  budget: Budget | null,
+): FinanceCache {
+  const cached = cache.budgets?.[month];
+  const previous = cached?.data.find((row) => row.category.id === categoryID);
+  const budgets = previous && cached
+    ? {
+        ...cache.budgets,
+        [month]: {
+          data: cached.data.map((row) =>
+            row.category.id === categoryID ? { ...row, budget } : row,
+          ),
+          updatedAt: 0,
+        },
+      }
+    : cache.budgets;
+  const summary = cache.summary;
+  if (!summary || summary.data.month !== month || !previous) {
+    return { ...cache, budgets, summary: summary ? { ...summary, updatedAt: 0 } : null };
+  }
+  const oldLimit = previous.budget?.limit_paisa ?? 0;
+  const newLimit = budget?.limit_paisa ?? 0;
+  return {
+    ...cache,
+    budgets,
+    summary: {
+      data: {
+        ...summary.data,
+        budget_limit_paisa: summary.data.budget_limit_paisa + newLimit - oldLimit,
+      },
+      updatedAt: 0,
+    },
+  };
+}
+
 export function invalidateFinanceCache(cache: FinanceCache): FinanceCache {
   return {
     ...cache,
@@ -88,6 +149,12 @@ export function invalidateFinanceCache(cache: FinanceCache): FinanceCache {
     transactions: Object.fromEntries(
       Object.entries(cache.transactions).map(([key, entry]) => [
         key,
+        { ...entry, updatedAt: 0 },
+      ]),
+    ),
+    budgets: Object.fromEntries(
+      Object.entries(cache.budgets ?? {}).map(([month, entry]) => [
+        month,
         { ...entry, updatedAt: 0 },
       ]),
     ),
@@ -220,9 +287,50 @@ function isFinanceCache(value: unknown): value is FinanceCache {
     return false;
   if (!cache.transactions || typeof cache.transactions !== "object")
     return false;
+  if (
+    cache.budgets !== undefined &&
+    (!cache.budgets || typeof cache.budgets !== "object" ||
+      !Object.values(cache.budgets).every((entry) =>
+        isEntry(entry, isBudgetRows)))
+  ) return false;
   return Object.values(cache.transactions).every((entry) =>
     isEntry(entry, isTransactionList),
   );
+}
+
+function isBudgetRows(value: unknown): value is BudgetWithSpent[] {
+  return Array.isArray(value) && value.every((row: unknown) => {
+    if (!row || typeof row !== "object") return false;
+    const item = row as Partial<BudgetWithSpent>;
+    return isCategory(item.category) &&
+      isInteger(item.spent_paisa) &&
+      (item.budget === null || isBudget(item.budget));
+  });
+}
+
+function isCategory(value: unknown): value is Category {
+  if (!value || typeof value !== "object") return false;
+  const category = value as Partial<Category>;
+  return typeof category.id === "string" &&
+    typeof category.name === "string" &&
+    (category.kind === "expense" || category.kind === "income") &&
+    typeof category.icon === "string" &&
+    typeof category.color === "string" &&
+    isInteger(category.sort_order) &&
+    typeof category.is_archived === "boolean" &&
+    typeof category.created_at === "string" &&
+    typeof category.updated_at === "string";
+}
+
+function isBudget(value: unknown): value is Budget {
+  if (!value || typeof value !== "object") return false;
+  const budget = value as Partial<Budget>;
+  return typeof budget.id === "string" &&
+    typeof budget.category_id === "string" &&
+    typeof budget.month === "string" &&
+    isInteger(budget.limit_paisa) &&
+    typeof budget.created_at === "string" &&
+    typeof budget.updated_at === "string";
 }
 
 function isEntry<T>(

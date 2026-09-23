@@ -293,9 +293,10 @@ Load config once at startup into a struct and fail fast with a clear message if 
 The phases below describe the intended product, not a claim that every screen
 is complete. See [README.md](README.md#live-release--september-9-2026) for the
 September 9 release and verified behavior. Home, Expenses and export are
-available; Ledger is now available as well. Budget, recurring-bill/category
-management, and work-log UI/API remain unfinished. Account invitations are
-deferred.
+available; Ledger is now available as well. The Budget screen is implemented
+in the current code, with production deployment not yet verified.
+Recurring-bill/category management and work-log UI/API remain unfinished.
+Account invitations are deferred.
 
 ## Build phases
 

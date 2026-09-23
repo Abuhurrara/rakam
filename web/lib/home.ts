@@ -19,7 +19,12 @@ export function budgetState(
   return {
     percent,
     visualPercent: Math.min(100, Math.max(0, percent)),
-    tone: percent >= 100 ? "brick" : percent >= 80 ? "gold" : "primary",
+    tone:
+      spentPaisa > limitPaisa
+        ? "brick"
+        : spentPaisa * 5 >= limitPaisa * 4
+          ? "gold"
+          : "primary",
   };
 }
 
