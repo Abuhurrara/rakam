@@ -199,7 +199,7 @@ function BudgetCard({ summary }: { summary: Summary }) {
         </div>
         {summary.budget_limit_paisa > 0 ? (
           <span className={`tabular text-sm font-semibold ${textTone}`}>
-            {state.percent}%
+            {state.overPaisa > 0 ? `${formatPaisa(state.overPaisa)} over` : `${state.percent}%`}
           </span>
         ) : null}
       </div>
@@ -212,7 +212,9 @@ function BudgetCard({ summary }: { summary: Summary }) {
             aria-valuemin={0}
             aria-valuemax={100}
             aria-valuenow={state.visualPercent}
-            aria-valuetext={`${state.percent}% used`}
+            aria-valuetext={state.overPaisa > 0
+              ? `${formatPaisa(state.overPaisa)} over limit`
+              : `${state.percent}% used`}
             className="mt-4 h-2.5 overflow-hidden rounded-full bg-paper-sunken"
           >
             <div

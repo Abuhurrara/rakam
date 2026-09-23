@@ -12,14 +12,14 @@ import { karachiMonthKey } from "./date";
 import type { LedgerTotalsDelta } from "./ledger";
 
 export const FINANCE_CACHE_FRESH_MS = 30_000;
-const VERSION = 1;
+const VERSION = 2;
 const MAX_TRANSACTION_QUERIES = 20;
 const MAX_BUDGET_MONTHS = 12;
 const storageKey = (userID: string) => `rakam.finance.v${VERSION}.${userID}`;
 
 export type CacheEntry<T> = { data: T; updatedAt: number };
 export type FinanceCache = {
-  version: 1;
+  version: 2;
   summary: CacheEntry<Summary> | null;
   transactions: Record<string, CacheEntry<TransactionList>>;
   // Optional so snapshots written before the Budget screen remain readable.
@@ -35,13 +35,33 @@ export function readFinanceCache(
   userID: string,
 ): FinanceCache {
   const raw = storage.getItem(storageKey(userID));
-  if (!raw) return emptyFinanceCache();
-  try {
-    const value: unknown = JSON.parse(raw);
-    return isFinanceCache(value) ? value : emptyFinanceCache();
-  } catch {
-    return emptyFinanceCache();
+  if (raw) {
+    try {
+      const value: unknown = JSON.parse(raw);
+      if (isFinanceCache(value)) return value;
+    } catch {
+      // Fall through to the previous cache version if one exists.
+    }
   }
+  const oldRaw = storage.getItem(`rakam.finance.v1.${userID}`);
+  if (oldRaw) {
+    try {
+      const old: unknown = JSON.parse(oldRaw);
+      if (isFinanceCache(old, 1)) {
+        // Old summary budget_spent_paisa included unbudgeted categories. Keep
+        // the useful lists, but fetch a correct summary from the API once.
+        return {
+          version: VERSION,
+          summary: null,
+          transactions: old.transactions,
+          budgets: old.budgets ?? {},
+        };
+      }
+    } catch {
+      // Invalid cache is discarded below.
+    }
+  }
+  return emptyFinanceCache();
 }
 
 export function writeFinanceCache(
@@ -50,10 +70,12 @@ export function writeFinanceCache(
   cache: FinanceCache,
 ): void {
   storage.setItem(storageKey(userID), JSON.stringify(cache));
+  storage.removeItem(`rakam.finance.v1.${userID}`);
 }
 
 export function clearFinanceCache(storage: Storage, userID: string): void {
   storage.removeItem(storageKey(userID));
+  storage.removeItem(`rakam.finance.v1.${userID}`);
 }
 
 export function isFresh(entry: CacheEntry<unknown>, now = Date.now()): boolean {
@@ -129,6 +151,8 @@ export function withBudgetChange(
   }
   const oldLimit = previous.budget?.limit_paisa ?? 0;
   const newLimit = budget?.limit_paisa ?? 0;
+  const spentDelta = (budget ? previous.spent_paisa : 0) -
+    (previous.budget ? previous.spent_paisa : 0);
   return {
     ...cache,
     budgets,
@@ -136,6 +160,7 @@ export function withBudgetChange(
       data: {
         ...summary.data,
         budget_limit_paisa: summary.data.budget_limit_paisa + newLimit - oldLimit,
+        budget_spent_paisa: summary.data.budget_spent_paisa + spentDelta,
       },
       updatedAt: 0,
     },
@@ -173,11 +198,12 @@ export function withSavedTransaction(
 ): FinanceCache {
   if (!cache.summary) return invalidateFinanceCache(cache);
   let summary = cache.summary.data;
+  const budgetRows = cache.budgets?.[summary.month]?.data;
   if (previous === undefined) {
-    summary = applyToSummaryTotals(summary, saved, 1);
+    summary = applyToSummaryTotals(summary, saved, 1, budgetRows);
   } else if (previous !== null) {
-    summary = applyToSummaryTotals(summary, previous, -1);
-    summary = applyToSummaryTotals(summary, saved, 1);
+    summary = applyToSummaryTotals(summary, previous, -1, budgetRows);
+    summary = applyToSummaryTotals(summary, saved, 1, budgetRows);
   }
   summary = {
     ...summary,
@@ -194,7 +220,8 @@ export function withoutDeletedTransaction(
   deleted: Transaction,
 ): FinanceCache {
   if (!cache.summary) return invalidateFinanceCache(cache);
-  const summary = applyToSummaryTotals(cache.summary.data, deleted, -1);
+  const summary = applyToSummaryTotals(cache.summary.data, deleted, -1,
+    cache.budgets?.[cache.summary.data.month]?.data);
   return invalidateFinanceCache({
     ...cache,
     summary: {
@@ -247,6 +274,7 @@ function applyToSummaryTotals(
   summary: Summary,
   transaction: Transaction,
   direction: 1 | -1,
+  budgetRows?: BudgetWithSpent[],
 ): Summary {
   if (karachiMonthKey(new Date(transaction.occurred_at)) !== summary.month) {
     return summary;
@@ -263,6 +291,10 @@ function applyToSummaryTotals(
     ...summary,
     expense_paisa: summary.expense_paisa + amount,
     net_paisa: summary.net_paisa - amount,
+    budget_spent_paisa: budgetRows?.some((row) =>
+      row.category.id === transaction.category_id && row.budget !== null)
+      ? summary.budget_spent_paisa + amount
+      : summary.budget_spent_paisa,
   };
 }
 
@@ -279,10 +311,10 @@ function upsertRecent(
     .slice(0, 5);
 }
 
-function isFinanceCache(value: unknown): value is FinanceCache {
+function isFinanceCache(value: unknown, version: 1 | 2 = VERSION): value is FinanceCache {
   if (!value || typeof value !== "object") return false;
   const cache = value as Partial<FinanceCache>;
-  if (cache.version !== VERSION) return false;
+  if (cache.version !== version) return false;
   if (cache.summary !== null && !isEntry(cache.summary, isSummary))
     return false;
   if (!cache.transactions || typeof cache.transactions !== "object")
