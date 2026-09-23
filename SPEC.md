@@ -293,8 +293,9 @@ Load config once at startup into a struct and fail fast with a clear message if 
 The phases below describe the intended product, not a claim that every screen
 is complete. See [README.md](README.md#live-release--september-9-2026) for the
 September 9 release and verified behavior. Home, Expenses and export are
-available; Ledger, Budget, recurring-bill/category management, and work-log
-UI/API remain unfinished. Account invitations are deferred.
+available; Ledger is now available as well. Budget, recurring-bill/category
+management, and work-log UI/API remain unfinished. Account invitations are
+deferred.
 
 ## Build phases
 
@@ -310,7 +311,7 @@ UI/API remain unfinished. Account invitations are deferred.
 
 **6 — Web foundation.** Next.js, Tailwind with the palette and type scale, the API rewrite, api client, login page, route protection, tab bar, and the add-transaction flow plus expenses list. *Verify:* the add flow genuinely takes under 5 seconds on a phone-sized viewport.
 
-**7 — Remaining screens.** Ledger, budget, bills, categories, home dashboard, export. *Verify:* every endpoint from phase 3 to 5 has a working screen.
+**7 — Product screens.** Ledger, budget, bills, categories, home dashboard, export. *Verify:* every endpoint from phase 3 to 5 has a working screen.
 
 **8 — Work log, PWA, polish.** Work log API and editor, manifest, service worker, icons, dark mode, empty states, README. *Verify:* installs to a phone home screen, opens offline, and the work log persists without an explicit save.
 
