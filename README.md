@@ -67,22 +67,42 @@ Invite-only accounts remain deferred.
 cd api
 cp .env.example .env      # then fill it in
 make migrate-up           # create the schema
-make seed                 # create your user, categories and people
+make user-create EMAIL=you@example.com NAME="Your Name"
 make run
 ```
 
-`api/.env` needs all five of these or the service exits at startup with a
-message naming what is missing:
+`api/.env` needs these three runtime values:
 
 | Variable | Notes |
 |---|---|
 | `DATABASE_URL` | PostgreSQL connection string (local or Neon) |
 | `JWT_SECRET` | at least 32 bytes — `openssl rand -base64 32` |
 | `PORT` | e.g. `8091` |
-| `SEED_EMAIL` | the one user's email |
-| `SEED_PASSWORD` | the one user's password |
 
-There is no signup route. `make seed` is the only way a user is created.
+For legacy local sample data only, `make seed` also needs `SEED_EMAIL` and
+`SEED_PASSWORD` in `api/.env`; it creates example categories and people.
+
+There is no public signup route. To create a private, empty account for a friend, apply migrations and run:
+
+```sh
+cd api
+make migrate-up
+make user-create EMAIL=friend@example.com NAME="Friend Name"
+```
+
+The command prompts for a password twice without echoing it. Passwords must be
+12–72 bytes. It only creates the account; it does not create categories,
+people, budgets, or finance data. New users can record uncategorized expenses
+until category management is available. To reset an account password:
+
+```sh
+make user-reset-password EMAIL=friend@example.com
+```
+
+A reset signs out all devices. Users can optionally change their own password
+from More; that also signs out their other devices. `make seed` is retained
+for local development fixtures only and should not be used for production
+account creation.
 
 ### 2. The web app
 
@@ -93,7 +113,7 @@ npm install
 npm run dev
 ```
 
-Open http://localhost:3000 and sign in with `SEED_EMAIL` / `SEED_PASSWORD`.
+Open http://localhost:3000 and sign in with the account credentials created above.
 
 **`API_ORIGIN` must match the `PORT` you set in `api/.env`.** It is the only
 variable the web app needs.
@@ -203,10 +223,12 @@ error:
 ## Deploying
 
 **Database — Neon.** Create a project, take the connection string, run
-`make migrate-up` and `make seed` against it from your machine.
+`make migrate-up` against it from your machine, then create the owner account
+with `make user-create EMAIL=... NAME=...`. `make seed` is only for local
+development fixtures and inserts example categories and people.
 
 **API — Render.** New Web Service from `api/` using the Dockerfile. Set
-`DATABASE_URL`, `JWT_SECRET`, `SEED_EMAIL`, `SEED_PASSWORD`. Render injects
+`DATABASE_URL`, `JWT_SECRET`. Render injects
 `PORT` itself. Note the service URL.
 
 **Web — Vercel.** New project with `web/` as the root directory. Set
@@ -225,7 +247,7 @@ missing, which is deliberate.
 - Full offline editing and automatic background sync are not implemented.
   Failed create/update requests retain a local draft for manual retry after
   reconnecting. An offline page load shows the offline fallback.
-- Account invitations, signup and password recovery are not implemented.
+- Public signup and email-based password recovery are not implemented. The owner provisions accounts with the CLI; users may change their own password from More.
 
 
 ## Reliable saves and expense totals

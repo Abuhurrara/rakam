@@ -174,12 +174,19 @@ export function login(email: string, password: string): Promise<User> {
   return apiFetch<User>("/api/auth/login", {
     method: "POST",
     body: { email, password },
-    skipAuthRedirect: true,
   });
 }
 
 export function logout(): Promise<null> {
   return apiFetch<null>("/api/auth/logout", { method: "POST" });
+}
+
+export function changePassword(currentPassword: string, newPassword: string): Promise<null> {
+  return apiFetch<null>("/api/auth/password", {
+    method: "PUT",
+    body: { current_password: currentPassword, new_password: newPassword },
+    skipAuthRedirect: true,
+  });
 }
 
 export function me(

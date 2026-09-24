@@ -32,12 +32,6 @@ func Load() (Config, error) {
 	if cfg.Port == "" {
 		missing = append(missing, "PORT")
 	}
-	if cfg.SeedEmail == "" {
-		missing = append(missing, "SEED_EMAIL")
-	}
-	if cfg.SeedPassword == "" {
-		missing = append(missing, "SEED_PASSWORD")
-	}
 	if len(missing) > 0 {
 		return Config{}, fmt.Errorf("missing required env vars: %v", missing)
 	}

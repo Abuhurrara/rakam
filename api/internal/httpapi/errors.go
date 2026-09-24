@@ -39,6 +39,8 @@ func writeError(w http.ResponseWriter, err error) {
 		status = http.StatusUnauthorized
 	case errors.Is(err, domain.ErrInvalidCredentials):
 		status = http.StatusUnauthorized
+	case errors.Is(err, domain.ErrInvalidPassword), errors.Is(err, domain.ErrInvalidUser), errors.Is(err, domain.ErrInvalidCurrentPassword):
+		status = http.StatusBadRequest
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)

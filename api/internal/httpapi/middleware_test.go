@@ -1,12 +1,38 @@
 package httpapi
 
 import (
+	"context"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 
 	"github.com/Abuhurrara/rakam/api/internal/auth"
+	"github.com/Abuhurrara/rakam/api/internal/domain"
+	"github.com/Abuhurrara/rakam/api/internal/service"
 )
+
+type middlewareUsers struct{}
+
+func (middlewareUsers) GetByEmail(context.Context, string) (domain.User, error) {
+	return domain.User{}, domain.ErrNotFound
+}
+func (middlewareUsers) GetByID(_ context.Context, id string) (domain.User, error) {
+	if id == "user-1" {
+		return domain.User{ID: id}, nil
+	}
+	return domain.User{}, errors.New("missing")
+}
+func (middlewareUsers) GetSessionVersion(_ context.Context, id string) (int, error) {
+	if id == "user-1" {
+		return 0, nil
+	}
+	return 0, errors.New("missing")
+}
+func (middlewareUsers) Create(context.Context, string, string, string) (domain.User, error) {
+	return domain.User{}, nil
+}
+func (middlewareUsers) UpdatePassword(context.Context, string, string) (int, error) { return 0, nil }
 
 func TestRequireAuth(t *testing.T) {
 	secret := []byte("a-secret-that-is-at-least-32-bytes-long")
@@ -43,7 +69,7 @@ func TestRequireAuth(t *testing.T) {
 				w.WriteHeader(http.StatusOK)
 			})
 
-			handler := requireAuth(secret, spy)
+			handler := requireAuth(service.NewAuthService(middlewareUsers{}, secret), spy)
 
 			req := httptest.NewRequest(http.MethodGet, "/api/protected", nil)
 			if tt.cookie != nil {
