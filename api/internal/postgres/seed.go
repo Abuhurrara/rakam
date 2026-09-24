@@ -42,6 +42,9 @@ var seedIncomeCategories = []seedCategory{
 var seedPeople = []string{"Usman", "Moiz", "Talha", "Ali", "Baba", "SCB Rent"}
 
 func Seed(ctx context.Context, pool *pgxpool.Pool, cfg config.Config) error {
+	if cfg.SeedEmail == "" || cfg.SeedPassword == "" {
+		return fmt.Errorf("SEED_EMAIL and SEED_PASSWORD are required for the legacy seed command")
+	}
 	hash, err := bcrypt.GenerateFromPassword([]byte(cfg.SeedPassword), bcrypt.DefaultCost)
 	if err != nil {
 		return fmt.Errorf("hashing seed password: %w", err)

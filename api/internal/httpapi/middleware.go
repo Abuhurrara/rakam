@@ -6,8 +6,8 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/Abuhurrara/rakam/api/internal/auth"
 	"github.com/Abuhurrara/rakam/api/internal/domain"
+	"github.com/Abuhurrara/rakam/api/internal/service"
 )
 
 type contextKey string
@@ -22,16 +22,16 @@ func UserIDFromContext(ctx context.Context) (string, bool) {
 // requireAuth rejects requests with a missing or invalid session cookie
 // and otherwise puts the token's user ID into the request context under
 // the same key existing handlers already read via UserIDFromContext.
-func requireAuth(secret []byte, next http.Handler) http.Handler {
+func requireAuth(svc *service.AuthService, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		cookie, err := r.Cookie(cookieName)
 		if err != nil {
 			writeError(w, domain.ErrUnauthorized)
 			return
 		}
-		userID, err := auth.VerifyToken(secret, cookie.Value)
+		userID, err := svc.ValidateSession(r.Context(), cookie.Value)
 		if err != nil {
-			writeError(w, domain.ErrUnauthorized)
+			writeError(w, err)
 			return
 		}
 		ctx := context.WithValue(r.Context(), userIDContextKey, userID)

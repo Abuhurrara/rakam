@@ -40,6 +40,11 @@ type loginRequest struct {
 	Password string `json:"password"`
 }
 
+type changePasswordRequest struct {
+	CurrentPassword string `json:"current_password"`
+	NewPassword     string `json:"new_password"`
+}
+
 type userResponse struct {
 	ID    string `json:"id"`
 	Email string `json:"email"`
@@ -93,5 +98,27 @@ func handleMe(svc *service.AuthService) http.HandlerFunc {
 		}
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(toUserResponse(user))
+	}
+}
+
+func handleChangePassword(svc *service.AuthService) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		var req changePasswordRequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			writeError(w, domain.ErrInvalidUser)
+			return
+		}
+		userID, ok := UserIDFromContext(r.Context())
+		if !ok {
+			writeError(w, domain.ErrUnauthorized)
+			return
+		}
+		token, err := svc.ChangePassword(r.Context(), userID, req.CurrentPassword, req.NewPassword)
+		if err != nil {
+			writeError(w, err)
+			return
+		}
+		setSessionCookie(w, token)
+		w.WriteHeader(http.StatusNoContent)
 	}
 }

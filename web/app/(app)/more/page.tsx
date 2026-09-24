@@ -1,17 +1,19 @@
-import { PhaseStub } from "@/components/PhaseStub";
+import { ChangePasswordForm } from "@/components/ChangePasswordForm";
 import { ExportButton } from "@/components/ExportButton";
 import { SignOutButton } from "@/components/SignOutButton";
 
 export default function MorePage() {
   return (
     <>
-      <PhaseStub
-        title="More"
-        summary="Recurring bill management, category settings and the work log are coming later. You can download your ledger below."
-      />
-      <div className="px-4">
-        <ExportButton />
-        <SignOutButton />
+      <div className="px-4 py-6">
+        <h1 className="text-xl font-semibold text-ink">More</h1>
+        <ChangePasswordForm />
+        <div className="mt-5">
+          <ExportButton />
+        </div>
+        <div className="mt-3">
+          <SignOutButton />
+        </div>
       </div>
     </>
   );

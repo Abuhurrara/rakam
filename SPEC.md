@@ -96,7 +96,7 @@ strings.
 
 Every user-owned table: `id uuid primary key default gen_random_uuid()`, `user_id uuid not null references users(id) on delete cascade`, `created_at timestamptz not null default now()`, `updated_at timestamptz not null default now()`. The `users` table is the exception: it has no `user_id`.
 
-**`users`** — `email` unique, `password_hash`, `name`. Exactly one row, created by a seed command, never by a signup endpoint.
+**`users`** — case-insensitive unique `email`, `password_hash`, `name`, and `session_version`. One row per private account, created through the trusted owner CLI, never by a public signup endpoint.
 
 **`categories`** — `name`, `kind` (`expense` | `income`), `icon` (emoji), `color` (hex), `sort_order`, `is_archived` bool.
 
@@ -190,9 +190,11 @@ Call it from `GET /api/summary`. No scheduler, no cron.
 
 ## Auth
 
-Single user, no signup route. A seed command (`go run ./cmd/api seed` or a small `cmd/seed`) creates the user from `SEED_EMAIL` and `SEED_PASSWORD`, hashing with bcrypt at default cost.
+Private accounts only: there is no public signup route or in-app account management. The trusted owner creates an empty account with `go run ./cmd/user create --email ... --name ...`; password input is hidden and confirmed in the terminal. Passwords are bcrypt-hashed. The owner can reset one with `go run ./cmd/user reset-password --email ...`. Users may optionally change their own password in More. Password change/reset increments a per-user session version, invalidating existing sessions on their next request while issuing a fresh session to the device that changed its own password. Emails are trimmed and case-insensitive unique. New accounts receive no categories, people, transactions, budgets, or bills.
 
-Login verifies the password and issues a JWT containing the user ID, 30-day expiry, set as an httpOnly, Secure, SameSite=Lax cookie. Middleware parses it and rejects with 401 when missing or invalid.
+The legacy `cmd/seed` exists only for development fixtures; it creates default categories and people and must not be used to provision a friend's production account.
+
+Login verifies the password and issues a JWT containing the user ID and session version, 30-day expiry, set as an httpOnly, Secure, SameSite=Lax cookie. Middleware parses it, confirms the user still exists and that the version matches, and rejects with 401 when missing, invalid, or revoked.
 
 **Every repository query filters by user_id, taken from the session context — never from a request body or path.** This matters even with one user; it's the habit that keeps multi-tenant code correct later.
 
@@ -279,7 +281,7 @@ editing and automatic background sync remain out of scope.
 
 ## Configuration
 
-API env: `DATABASE_URL`, `JWT_SECRET`, `PORT`, `SEED_EMAIL`, `SEED_PASSWORD`.
+API env: `DATABASE_URL`, `JWT_SECRET`, `PORT`. `SEED_EMAIL` and `SEED_PASSWORD` are optional and are used only by the legacy local development fixture command.
 Web env: `API_ORIGIN`.
 
 Load config once at startup into a struct and fail fast with a clear message if anything required is missing. Provide `.env.example` for both. Include a `Makefile` with `run`, `test`, `migrate-up`, `migrate-down`, `seed`.
