@@ -3,7 +3,7 @@ const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const load = require('./load-ts.cjs');
 const { listBudgets, upsertBudget, deleteBudget, ApiError } = load('lib/api.ts');
-const { shiftMonthKey, isFutureMonth } = load('lib/date.ts');
+const { shiftMonthKey, isFutureMonth, karachiWeekRange, karachiLast14DaysRange } = load('lib/date.ts');
 const { budgetState } = load('lib/home.ts');
 const {
   emptyFinanceCache, isFresh, invalidateFinanceCache, readFinanceCache,
@@ -40,6 +40,14 @@ test('month controls stop at the current Karachi month', () => {
   assert.equal(shiftMonthKey('2026-08', 1), '2026-09');
   assert.equal(isFutureMonth('2026-09', now), false);
   assert.equal(isFutureMonth('2026-10', now), true);
+});
+
+test('expense date presets use Karachi dates and include today', () => {
+  const sunday = new Date('2026-09-20T19:30:00Z'); // Monday morning in Karachi.
+  assert.deepEqual(karachiWeekRange(sunday), { from: '2026-09-21', to: '2026-09-21' });
+  assert.deepEqual(karachiLast14DaysRange(new Date('2026-09-20T19:30:00Z')), {
+    from: '2026-09-08', to: '2026-09-21',
+  });
 });
 
 test('warning colours use exact 80% and above 100% boundaries', () => {

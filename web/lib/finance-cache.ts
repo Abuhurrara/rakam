@@ -86,6 +86,8 @@ export function transactionQueryKey(query: TransactionQuery): string {
   const params = new URLSearchParams();
   if (query.kind) params.set("kind", query.kind);
   if (query.month) params.set("month", query.month);
+  if (query.from) params.set("from", query.from);
+  if (query.to) params.set("to", query.to);
   if (query.category_id) params.set("category_id", query.category_id);
   if (query.q) params.set("q", query.q);
   if (query.limit !== undefined) params.set("limit", String(query.limit));

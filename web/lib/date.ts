@@ -75,6 +75,26 @@ export function karachiDateInputValue(d: Date): string {
   return `${p.year}-${p.month}-${p.day}`;
 }
 
+/** Move a Karachi calendar date by whole days without using device timezone. */
+export function shiftDayKey(dayKey: string, delta: number): string {
+  const [year, month, day] = dayKey.split("-").map(Number);
+  const date = new Date(Date.UTC(year, month - 1, day + delta, 12));
+  return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, "0")}-${String(date.getUTCDate()).padStart(2, "0")}`;
+}
+
+/** Monday-through-today range, based on Karachi's calendar day. */
+export function karachiWeekRange(now: Date): { from: string; to: string } {
+  const today = karachiDateInputValue(now);
+  const weekday = new Date(`${today}T12:00:00Z`).getUTCDay();
+  return { from: shiftDayKey(today, -((weekday + 6) % 7)), to: today };
+}
+
+/** A rolling 14-day range including today. */
+export function karachiLast14DaysRange(now: Date): { from: string; to: string } {
+  const to = karachiDateInputValue(now);
+  return { from: shiftDayKey(to, -13), to };
+}
+
 /**
  * Turn a date input's "2026-08-14" back into RFC3339, keeping the current
  * Karachi time of day. Picking a past date should not also reset the clock to
