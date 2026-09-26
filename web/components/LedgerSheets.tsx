@@ -328,7 +328,7 @@ export function SettleSheet({
 }) {
   const [recordMovement, setRecordMovement] = useState(false);
   const [categoryID, setCategoryID] = useState<string | null>(null);
-  const { all: categories, loading: categoriesLoading } = useCategories();
+  const { active: categories, loading: categoriesLoading } = useCategories();
   const direction = useMemo(() => commonDirection(entries), [entries]);
   const compatibleCategories = useMemo(
     () =>

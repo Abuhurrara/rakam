@@ -20,6 +20,7 @@ func NewRouter(categorySvc *service.CategoryService, transactionSvc *service.Tra
 	mux.Handle("POST /api/categories", requireAuth(authSvc, handleCreateCategory(categorySvc)))
 	mux.Handle("PATCH /api/categories/{id}", requireAuth(authSvc, handleUpdateCategory(categorySvc)))
 	mux.Handle("DELETE /api/categories/{id}", requireAuth(authSvc, handleArchiveCategory(categorySvc)))
+	mux.Handle("POST /api/categories/{id}/restore", requireAuth(authSvc, handleRestoreCategory(categorySvc)))
 
 	mux.Handle("GET /api/transactions", requireAuth(authSvc, handleListTransactions(transactionSvc)))
 	mux.Handle("POST /api/transactions", requireAuth(authSvc, handleCreateTransaction(transactionSvc)))

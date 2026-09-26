@@ -22,11 +22,14 @@ import type { Category } from "@/lib/types";
 
 type CategoriesValue = {
   all: Category[];
+  active: Category[];
   expense: Category[];
   byId: Map<string, Category>;
   loading: boolean;
   error: ApiError | null;
   reload: () => void;
+  saveLocal: (category: Category) => void;
+  archiveLocal: (id: string) => void;
 };
 
 const CategoriesContext = createContext<CategoriesValue | null>(null);
@@ -46,6 +49,20 @@ export function CategoriesProvider({
   const [nonce, setNonce] = useState(0);
 
   const reload = useCallback(() => setNonce((n) => n + 1), []);
+  const saveLocal = useCallback((category: Category) => {
+    setAll((current) => {
+      const found = current.some((item) => item.id === category.id);
+      const next = found
+        ? current.map((item) => item.id === category.id ? category : item)
+        : [...current, category];
+      return next.sort((a, b) => a.sort_order - b.sort_order || a.name.localeCompare(b.name));
+    });
+  }, []);
+  const archiveLocal = useCallback((id: string) => {
+    setAll((current) => current.map((category) =>
+      category.id === id ? { ...category, is_archived: true } : category,
+    ));
+  }, []);
 
   useEffect(() => {
     if (!enabled) return;
@@ -72,15 +89,21 @@ export function CategoriesProvider({
   }, [enabled, nonce]);
 
   const value = useMemo<CategoriesValue>(
-    () => ({
-      all,
-      expense: all.filter((c) => c.kind === "expense"),
-      byId: new Map(all.map((c) => [c.id, c])),
-      loading,
-      error,
-      reload,
-    }),
-    [all, loading, error, reload],
+    () => {
+      const active = all.filter((category) => !category.is_archived);
+      return {
+        all,
+        active,
+        expense: active.filter((category) => category.kind === "expense"),
+        byId: new Map(all.map((category) => [category.id, category])),
+        loading,
+        error,
+        reload,
+        saveLocal,
+        archiveLocal,
+      };
+    },
+    [all, loading, error, reload, saveLocal, archiveLocal],
   );
 
   return (

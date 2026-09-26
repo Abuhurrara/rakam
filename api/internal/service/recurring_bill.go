@@ -99,5 +99,8 @@ func (s *RecurringBillService) validate(ctx context.Context, b domain.RecurringB
 	if cat.Kind != domain.KindExpense {
 		return fmt.Errorf("%w: bill category must be an expense category", domain.ErrInvalidRecurringBill)
 	}
+	if cat.IsArchived {
+		return fmt.Errorf("%w: bill category must be active", domain.ErrInvalidRecurringBill)
+	}
 	return nil
 }

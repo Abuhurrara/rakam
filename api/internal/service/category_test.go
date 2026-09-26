@@ -63,6 +63,20 @@ func (f *fakeCategoryRepo) Archive(ctx context.Context, userID, id string) error
 	return nil
 }
 
+func (f *fakeCategoryRepo) Restore(ctx context.Context, userID, id string) (domain.Category, error) {
+	existing, ok := f.categories[id]
+	if !ok || existing.UserID != userID {
+		return domain.Category{}, domain.ErrNotFound
+	}
+	existing.IsArchived = false
+	f.categories[id] = existing
+	return existing, nil
+}
+
+func validCategory(userID, name string, kind domain.Kind) domain.Category {
+	return domain.Category{UserID: userID, Name: name, Kind: kind, Icon: "🏷️", Color: "#2E7D32"}
+}
+
 func TestCategoryService_Create(t *testing.T) {
 	tests := []struct {
 		name    string
@@ -71,20 +85,20 @@ func TestCategoryService_Create(t *testing.T) {
 	}{
 		{
 			name:  "valid expense category",
-			input: domain.Category{UserID: "user-1", Name: "Food", Kind: domain.KindExpense},
+			input: validCategory("user-1", "Food", domain.KindExpense),
 		},
 		{
 			name:  "valid income category",
-			input: domain.Category{UserID: "user-1", Name: "Salary", Kind: domain.KindIncome},
+			input: validCategory("user-1", "Salary", domain.KindIncome),
 		},
 		{
 			name:    "empty name",
-			input:   domain.Category{UserID: "user-1", Name: "  ", Kind: domain.KindExpense},
+			input:   validCategory("user-1", "  ", domain.KindExpense),
 			wantErr: domain.ErrInvalidCategory,
 		},
 		{
 			name:    "invalid kind",
-			input:   domain.Category{UserID: "user-1", Name: "Food", Kind: "bogus"},
+			input:   validCategory("user-1", "Food", "bogus"),
 			wantErr: domain.ErrInvalidCategory,
 		},
 	}
@@ -120,10 +134,10 @@ func TestCategoryService_List_ScopesToUser(t *testing.T) {
 	svc := NewCategoryService(repo)
 	ctx := context.Background()
 
-	if _, err := svc.Create(ctx, domain.Category{UserID: "user-1", Name: "Food", Kind: domain.KindExpense}); err != nil {
+	if _, err := svc.Create(ctx, validCategory("user-1", "Food", domain.KindExpense)); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if _, err := svc.Create(ctx, domain.Category{UserID: "user-2", Name: "Rent", Kind: domain.KindExpense}); err != nil {
+	if _, err := svc.Create(ctx, validCategory("user-2", "Rent", domain.KindExpense)); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
@@ -141,12 +155,14 @@ func TestCategoryService_Update_NotFoundForOtherUser(t *testing.T) {
 	svc := NewCategoryService(repo)
 	ctx := context.Background()
 
-	created, err := svc.Create(ctx, domain.Category{UserID: "user-1", Name: "Food", Kind: domain.KindExpense})
+	created, err := svc.Create(ctx, validCategory("user-1", "Food", domain.KindExpense))
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	_, err = svc.Update(ctx, domain.Category{ID: created.ID, UserID: "user-2", Name: "Hijacked", Kind: domain.KindExpense})
+	updated := validCategory("user-2", "Hijacked", domain.KindExpense)
+	updated.ID = created.ID
+	_, err = svc.Update(ctx, updated)
 	if !errors.Is(err, domain.ErrNotFound) {
 		t.Fatalf("got error %v, want %v", err, domain.ErrNotFound)
 	}
@@ -157,7 +173,7 @@ func TestCategoryService_Archive(t *testing.T) {
 	svc := NewCategoryService(repo)
 	ctx := context.Background()
 
-	created, err := svc.Create(ctx, domain.Category{UserID: "user-1", Name: "Food", Kind: domain.KindExpense})
+	created, err := svc.Create(ctx, validCategory("user-1", "Food", domain.KindExpense))
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -167,5 +183,52 @@ func TestCategoryService_Archive(t *testing.T) {
 	}
 	if !repo.categories[created.ID].IsArchived {
 		t.Fatal("expected category to be archived")
+	}
+}
+
+func TestCategoryService_CreateRejectsDuplicateNamesIgnoringCase(t *testing.T) {
+	repo := newFakeCategoryRepo()
+	svc := NewCategoryService(repo)
+	ctx := context.Background()
+	if _, err := svc.Create(ctx, validCategory("user-1", "Food", domain.KindExpense)); err != nil {
+		t.Fatalf("creating first category: %v", err)
+	}
+	if _, err := svc.Create(ctx, validCategory("user-1", " food ", domain.KindExpense)); !errors.Is(err, domain.ErrDuplicateCategory) {
+		t.Fatalf("creating duplicate category returned %v, want ErrDuplicateCategory", err)
+	}
+	if _, err := svc.Create(ctx, validCategory("user-1", "Food", domain.KindIncome)); err != nil {
+		t.Fatalf("same name in another kind should be allowed: %v", err)
+	}
+}
+
+func TestCategoryService_UpdateCannotChangeKind(t *testing.T) {
+	repo := newFakeCategoryRepo()
+	svc := NewCategoryService(repo)
+	ctx := context.Background()
+	created, err := svc.Create(ctx, validCategory("user-1", "Food", domain.KindExpense))
+	if err != nil {
+		t.Fatalf("creating category: %v", err)
+	}
+	updated := validCategory("user-1", "Salary", domain.KindIncome)
+	updated.ID = created.ID
+	if _, err := svc.Update(ctx, updated); !errors.Is(err, domain.ErrInvalidCategory) {
+		t.Fatalf("changing category kind returned %v, want ErrInvalidCategory", err)
+	}
+}
+
+func TestCategoryService_Restore(t *testing.T) {
+	repo := newFakeCategoryRepo()
+	svc := NewCategoryService(repo)
+	ctx := context.Background()
+	created, err := svc.Create(ctx, validCategory("user-1", "Food", domain.KindExpense))
+	if err != nil {
+		t.Fatalf("creating category: %v", err)
+	}
+	if err := svc.Archive(ctx, "user-1", created.ID); err != nil {
+		t.Fatalf("archiving category: %v", err)
+	}
+	restored, err := svc.Restore(ctx, "user-1", created.ID)
+	if err != nil || restored.IsArchived {
+		t.Fatalf("Restore() = (%+v, %v), want unarchived category", restored, err)
 	}
 }

@@ -52,6 +52,9 @@ func (s *BudgetService) Upsert(ctx context.Context, userID, categoryID, monthStr
 	if cat.Kind != domain.KindExpense {
 		return domain.Budget{}, fmt.Errorf("%w: budget category must be an expense category", domain.ErrInvalidBudget)
 	}
+	if cat.IsArchived {
+		return domain.Budget{}, fmt.Errorf("%w: budget category must be active", domain.ErrInvalidBudget)
+	}
 
 	upserted, err := s.budgetRepo.Upsert(ctx, domain.Budget{UserID: userID, CategoryID: categoryID, Month: month, LimitPaisa: limitPaisa})
 	if err != nil {

@@ -13,6 +13,8 @@ func writeError(w http.ResponseWriter, err error) {
 	switch {
 	case errors.Is(err, domain.ErrIdempotencyConflict):
 		status = http.StatusConflict
+	case errors.Is(err, domain.ErrDuplicateCategory), errors.Is(err, domain.ErrCategoryInUse):
+		status = http.StatusConflict
 	case errors.Is(err, domain.ErrNotFound):
 		status = http.StatusNotFound
 	case errors.Is(err, domain.ErrInvalidCategory):

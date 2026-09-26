@@ -7,7 +7,7 @@ export
 GOCACHE ?= /tmp/rakam-go-build
 export GOCACHE
 
-.PHONY: run test vet check migrate-up migrate-down seed user-create user-reset-password
+.PHONY: run test vet check migrate-up migrate-down seed user-create user-reset-password user-seed-categories
 
 run:
 	go run ./cmd/api
@@ -34,3 +34,6 @@ user-create:
 
 user-reset-password:
 	go run ./cmd/user reset-password --email "$(EMAIL)"
+
+user-seed-categories:
+	go run ./cmd/user seed-categories --email "$(EMAIL)"

@@ -6,7 +6,7 @@ import (
 	"testing"
 )
 
-func TestUserRepo_CreateStartsEmptyAndPasswordUpdateRevokesSessions(t *testing.T) {
+func TestUserRepo_CreateSeedsCategoriesAndPasswordUpdateRevokesSessions(t *testing.T) {
 	pool := testPool(t)
 	ctx := context.Background()
 	repo := NewUserRepo(pool)
@@ -29,8 +29,12 @@ func TestUserRepo_CreateStartsEmptyAndPasswordUpdateRevokesSessions(t *testing.T
 		if err := pool.QueryRow(ctx, query, user.ID).Scan(check.into); err != nil {
 			t.Fatalf("counting %s for new account: %v", check.table, err)
 		}
-		if *check.into != 0 {
-			t.Fatalf("new account has %d %s rows, want none", *check.into, check.table)
+		want := 0
+		if check.table == "categories" {
+			want = len(seedExpenseCategories) + len(seedIncomeCategories)
+		}
+		if *check.into != want {
+			t.Fatalf("new account has %d %s rows, want %d", *check.into, check.table, want)
 		}
 	}
 
