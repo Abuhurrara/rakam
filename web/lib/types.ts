@@ -80,6 +80,8 @@ export type TransactionList = {
 export type TransactionQuery = {
   kind?: Kind;
   month?: string;
+  from?: string;
+  to?: string;
   category_id?: string;
   q?: string;
   limit?: number;

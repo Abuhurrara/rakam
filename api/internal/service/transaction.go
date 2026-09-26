@@ -28,6 +28,8 @@ func NewTransactionService(txRepo port.TransactionRepo, catRepo port.CategoryRep
 // transaction list request. MonthStr, when set, is "2006-01".
 type ListParams struct {
 	MonthStr   *string
+	FromStr    *string
+	ToStr      *string
 	CategoryID *string
 	Query      *string
 	Kind       *domain.Kind
@@ -58,12 +60,31 @@ func (s *TransactionService) List(ctx context.Context, userID string, p ListPara
 		Offset:     clampOffset(p.Offset),
 	}
 
+	if p.MonthStr != nil && (p.FromStr != nil || p.ToStr != nil) {
+		return ListResult{}, fmt.Errorf("%w: use month or from/to, not both", domain.ErrInvalidDateRange)
+	}
+	if (p.FromStr == nil) != (p.ToStr == nil) {
+		return ListResult{}, fmt.Errorf("%w: from and to are both required", domain.ErrInvalidDateRange)
+	}
 	if p.MonthStr != nil {
 		first, next, err := karachiMonthRange(*p.MonthStr, s.loc)
 		if err != nil {
 			return ListResult{}, err
 		}
 		filter.From = &first
+		filter.To = &next
+	}
+	if p.FromStr != nil {
+		from, err := time.ParseInLocation("2006-01-02", *p.FromStr, s.loc)
+		if err != nil || from.Format("2006-01-02") != *p.FromStr {
+			return ListResult{}, fmt.Errorf("%w: dates must be YYYY-MM-DD", domain.ErrInvalidDateRange)
+		}
+		through, err := time.ParseInLocation("2006-01-02", *p.ToStr, s.loc)
+		if err != nil || through.Format("2006-01-02") != *p.ToStr || through.Before(from) {
+			return ListResult{}, fmt.Errorf("%w: to must be a valid date on or after from", domain.ErrInvalidDateRange)
+		}
+		next := through.AddDate(0, 0, 1)
+		filter.From = &from
 		filter.To = &next
 	}
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { ApiError, listTransactions } from "@/lib/api";
 import { formatPaisa, sumPaisa } from "@/lib/money";
 import {
@@ -9,12 +9,16 @@ import {
   formatTime,
   isFutureMonth,
   karachiDayKey,
+  karachiDateInputValue,
+  karachiLast14DaysRange,
   karachiMonthKey,
+  karachiWeekRange,
   shiftMonthKey,
 } from "@/lib/date";
 import { friendlyMessage } from "@/lib/useMutation";
 import { isFresh, transactionQueryKey } from "@/lib/finance-cache";
 import type {
+  Category,
   Transaction,
   TransactionList,
   TransactionQuery,
@@ -26,6 +30,7 @@ import { Spinner } from "./Spinner";
 import { useFinanceData } from "./FinanceDataProvider";
 
 const PAGE_SIZE = 50;
+type Period = "month" | "week" | "14days" | "custom";
 
 type Row =
   { kind: "saved"; t: Transaction } | { kind: "pending"; p: PendingSave };
@@ -37,21 +42,39 @@ export function ExpensesScreen() {
   const financeData = useFinanceData();
 
   const [month, setMonth] = useState(() => karachiMonthKey(new Date()));
+  const [period, setPeriod] = useState<Period>("month");
+  const [customFrom, setCustomFrom] = useState(
+    () => `${karachiMonthKey(new Date())}-01`,
+  );
+  const [customTo, setCustomTo] = useState(() => karachiDateInputValue(new Date()));
+  const [filtersOpen, setFiltersOpen] = useState(false);
   const [categoryId, setCategoryId] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [debouncedQuery, setDebouncedQuery] = useState("");
 
   const [page, setPage] = useState(0);
-  const queryParams = useMemo<TransactionQuery>(
-    () => ({
-      month,
+  const queryParams = useMemo<TransactionQuery>(() => {
+    const today = new Date();
+    const range =
+      period === "week"
+        ? karachiWeekRange(today)
+        : period === "14days"
+          ? karachiLast14DaysRange(today)
+          : null;
+    return {
+      ...(period === "month"
+        ? { month }
+        : period === "custom"
+          ? { from: customFrom, to: customTo }
+          : (range ?? {})),
       kind: "expense",
       offset: page * PAGE_SIZE,
       category_id: categoryId ?? undefined,
       q: debouncedQuery || undefined,
       limit: PAGE_SIZE,
-    }),
-    [month, page, categoryId, debouncedQuery],
+    };
+  },
+    [month, period, customFrom, customTo, page, categoryId, debouncedQuery],
   );
   const cacheKey = transactionQueryKey(queryParams);
   const initialCached = financeData.readTransactions(cacheKey);
@@ -133,7 +156,23 @@ export function ExpensesScreen() {
   const visiblePending = useMemo(
     () =>
       pending.filter((p) => {
-        if (karachiMonthKey(new Date(p.input.occurred_at)) !== month) {
+        const day = karachiDayKey(p.input.occurred_at);
+        const range =
+          period === "week"
+            ? karachiWeekRange(new Date())
+            : period === "14days"
+              ? karachiLast14DaysRange(new Date())
+              : null;
+        if (
+          period === "month" &&
+          karachiMonthKey(new Date(p.input.occurred_at)) !== month
+        ) {
+          return false;
+        }
+        if (period === "custom" && (day < customFrom || day > customTo)) {
+          return false;
+        }
+        if (range && (day < range.from || day > range.to)) {
           return false;
         }
         if (categoryId && p.input.category_id !== categoryId) return false;
@@ -147,7 +186,7 @@ export function ExpensesScreen() {
         }
         return true;
       }),
-    [pending, month, categoryId, debouncedQuery],
+    [pending, month, period, customFrom, customTo, categoryId, debouncedQuery],
   );
 
   const groups = useMemo(
@@ -155,22 +194,42 @@ export function ExpensesScreen() {
     [expenses, visiblePending],
   );
 
-  const filtered = categoryId !== null || debouncedQuery !== "";
+  const filtered =
+    period !== "month" || categoryId !== null || debouncedQuery !== "";
   const truncated = apiTotal > PAGE_SIZE;
+  const activeFilterCount = Number(period !== "month") + Number(categoryId !== null);
+  const spentLabel =
+    period === "week"
+      ? "Spent this week"
+      : period === "14days"
+        ? "Spent in last 14 days"
+        : period === "custom"
+          ? `Spent · ${customFrom} to ${customTo}`
+          : `Spent in ${formatMonthLabel(month)}`;
 
   return (
     <div className="px-4 pt-4">
-      <MonthHeader
-        month={month}
-        onChange={(next) => {
-          setMonth(next);
-          setPage(0);
-        }}
-      />
+      {period === "month" ? (
+        <MonthHeader
+          month={month}
+          onChange={(next) => {
+            setMonth(next);
+            setPage(0);
+          }}
+        />
+      ) : (
+        <div className="flex min-h-11 items-center justify-center text-base font-semibold text-ink">
+          {period === "week"
+            ? "This week"
+            : period === "14days"
+              ? "Last 14 days"
+              : "Custom dates"}
+        </div>
+      )}
 
       <div className="mt-3 rounded-2xl border border-line bg-paper-raised px-4 py-3.5">
         <p className="text-label uppercase tracking-widest text-ink-faint">
-          {filtered ? "Spent, filtered" : "Spent this month"}
+          {spentLabel}
         </p>
         <p className="tabular mt-1 text-money-lg font-semibold text-ink">
           {spent === null ? "—" : formatPaisa(spent)}
@@ -184,36 +243,96 @@ export function ExpensesScreen() {
         ) : null}
       </div>
 
-      <input
-        type="search"
-        value={query}
-        onChange={(e) => setQuery(e.target.value)}
-        placeholder="Search notes"
-        aria-label="Search notes"
-        className="mt-3 min-h-11 w-full rounded-xl border border-line bg-paper-raised px-3.5 text-sm text-ink placeholder:text-ink-faint focus:border-primary focus:outline-none"
-      />
-
-      <div className="no-scrollbar -mx-4 mt-3 flex gap-1.5 overflow-x-auto px-4 pb-1">
-        <FilterChip
-          label="All"
-          active={categoryId === null}
-          onClick={() => {
-            setCategoryId(null);
-            setPage(0);
-          }}
+      <div className="mt-3 flex items-center gap-2">
+        <input
+          type="search"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder="Search notes"
+          aria-label="Search notes"
+          className="min-h-11 min-w-0 flex-1 rounded-xl border border-line bg-paper-raised px-3.5 text-sm text-ink placeholder:text-ink-faint focus:border-primary focus:outline-none"
         />
-        {expenseCategories.map((c) => (
-          <FilterChip
-            key={c.id}
-            label={`${c.icon} ${c.name}`}
-            active={categoryId === c.id}
-            onClick={() => {
-              setCategoryId(categoryId === c.id ? null : c.id);
-              setPage(0);
-            }}
-          />
-        ))}
+        <button
+          type="button"
+          onClick={() => setFiltersOpen((open) => !open)}
+          aria-expanded={filtersOpen}
+          aria-controls="expense-filter-options"
+          aria-label={`${filtersOpen ? "Hide" : "Show"} filters${activeFilterCount ? `, ${activeFilterCount} active` : ""}`}
+          className={`flex min-h-11 shrink-0 items-center gap-2 rounded-xl border px-3 text-sm font-medium ${activeFilterCount ? "border-primary/40 bg-primary/10 text-primary" : "border-line bg-paper-raised text-ink-soft"}`}
+        >
+          <FilterIcon />
+          Filters
+          {activeFilterCount ? (
+            <span className="tabular text-xs">{activeFilterCount}</span>
+          ) : null}
+        </button>
       </div>
+
+      {activeFilterCount ? (
+        <div className="no-scrollbar mt-2 flex gap-1.5 overflow-x-auto pb-0.5">
+          {period !== "month" ? (
+            <AppliedFilter
+              label={
+                period === "week"
+                  ? "This week"
+                  : period === "14days"
+                    ? "Last 14 days"
+                    : "Custom dates"
+              }
+              onRemove={() => {
+                setPeriod("month");
+                setPage(0);
+              }}
+            />
+          ) : null}
+          {categoryId ? (
+            <AppliedFilter
+              label={(() => {
+                const category = expenseCategories.find(
+                  (item) => item.id === categoryId,
+                );
+                return category ? `${category.icon} ${category.name}` : "Category";
+              })()}
+              onRemove={() => {
+                setCategoryId(null);
+                setPage(0);
+              }}
+            />
+          ) : null}
+        </div>
+      ) : null}
+
+      <ExpenseFilterSheet
+        open={filtersOpen}
+        onRequestClose={() => setFiltersOpen(false)}
+        period={period}
+        month={month}
+        customFrom={customFrom}
+        customTo={customTo}
+        categories={expenseCategories}
+        categoryId={categoryId}
+        onPeriodChange={(next) => {
+          setPeriod(next);
+          setPage(0);
+        }}
+        onCustomFromChange={(next) => {
+          setCustomFrom(next);
+          setPage(0);
+        }}
+        onCustomToChange={(next) => {
+          setCustomTo(next);
+          setPage(0);
+        }}
+        onCategoryChange={(next) => {
+          setCategoryId(next);
+          setPage(0);
+        }}
+        onClear={() => {
+          setPeriod("month");
+          setCategoryId(null);
+          setPage(0);
+        }}
+      />
 
       <div className="mt-4" aria-busy={loading}>
         {data && error ? (
@@ -555,6 +674,203 @@ function FilterChip({
     >
       {label}
     </button>
+  );
+}
+
+function AppliedFilter({
+  label,
+  onRemove,
+}: {
+  label: string;
+  onRemove: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onRemove}
+      aria-label={`Remove ${label} filter`}
+      className="min-h-8 shrink-0 rounded-full border border-primary/30 bg-primary/10 px-3 text-xs font-medium text-primary"
+    >
+      {label} <span aria-hidden="true">×</span>
+    </button>
+  );
+}
+
+function ExpenseFilterSheet({
+  open,
+  onRequestClose,
+  period,
+  month,
+  customFrom,
+  customTo,
+  categories,
+  categoryId,
+  onPeriodChange,
+  onCustomFromChange,
+  onCustomToChange,
+  onCategoryChange,
+  onClear,
+}: {
+  open: boolean;
+  onRequestClose: () => void;
+  period: Period;
+  month: string;
+  customFrom: string;
+  customTo: string;
+  categories: Category[];
+  categoryId: string | null;
+  onPeriodChange: (period: Period) => void;
+  onCustomFromChange: (date: string) => void;
+  onCustomToChange: (date: string) => void;
+  onCategoryChange: (id: string | null) => void;
+  onClear: () => void;
+}) {
+  const dialogRef = useRef<HTMLDialogElement>(null);
+  const titleId = useId();
+
+  useEffect(() => {
+    const dialog = dialogRef.current;
+    if (!dialog) return;
+    if (open && !dialog.open) dialog.showModal();
+    if (!open && dialog.open) dialog.close();
+  }, [open]);
+
+  return (
+    <dialog
+      ref={dialogRef}
+      id="expense-filter-options"
+      aria-labelledby={titleId}
+      onCancel={(event) => {
+        event.preventDefault();
+        onRequestClose();
+      }}
+      onClose={() => {
+        if (open) onRequestClose();
+      }}
+      onClick={(event) => {
+        if (event.target === event.currentTarget) onRequestClose();
+      }}
+      className="fixed inset-x-0 bottom-0 m-0 w-full max-w-lg rounded-t-3xl border border-line bg-paper p-0 text-ink shadow-2xl backdrop:bg-overlay sm:inset-auto sm:left-1/2 sm:top-1/2 sm:w-[min(28rem,calc(100%-2rem))] sm:-translate-x-1/2 sm:-translate-y-1/2 sm:rounded-3xl"
+    >
+      <div className="max-h-[82dvh] overflow-y-auto px-4 pt-4 pb-[calc(env(safe-area-inset-bottom,0px)+1rem)] sm:max-h-[min(80dvh,38rem)]">
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <h2 id={titleId} className="text-lg font-semibold">
+              Filter expenses
+            </h2>
+            <p className="mt-0.5 text-xs text-ink-faint">
+              Narrow the list by date and category.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={onRequestClose}
+            aria-label="Close filters"
+            className="-mr-2 min-h-11 min-w-11 rounded-full text-xl text-ink-soft"
+          >
+            ×
+          </button>
+        </div>
+
+        <fieldset className="mt-5">
+          <legend className="mb-2 text-xs font-medium text-ink-faint">
+            Date range
+          </legend>
+          <div className="grid grid-cols-2 gap-2">
+            <FilterChip
+              label="This week"
+              active={period === "week"}
+              onClick={() => onPeriodChange("week")}
+            />
+            <FilterChip
+              label="Last 14 days"
+              active={period === "14days"}
+              onClick={() => onPeriodChange("14days")}
+            />
+            <FilterChip
+              label={month === karachiMonthKey(new Date()) ? "This month" : "Selected month"}
+              active={period === "month"}
+              onClick={() => onPeriodChange("month")}
+            />
+            <FilterChip
+              label="Custom dates"
+              active={period === "custom"}
+              onClick={() => onPeriodChange("custom")}
+            />
+          </div>
+        </fieldset>
+
+        {period === "custom" ? (
+          <div className="mt-4 grid grid-cols-2 gap-2">
+            <label className="text-xs text-ink-faint">
+              From
+              <input
+                aria-label="From date"
+                type="date"
+                value={customFrom}
+                max={customTo}
+                onChange={(event) => onCustomFromChange(event.target.value)}
+                className="mt-1 min-h-11 w-full rounded-xl border border-line bg-paper-raised px-2 text-sm text-ink"
+              />
+            </label>
+            <label className="text-xs text-ink-faint">
+              Through
+              <input
+                aria-label="Through date"
+                type="date"
+                value={customTo}
+                min={customFrom}
+                max={karachiDateInputValue(new Date())}
+                onChange={(event) => onCustomToChange(event.target.value)}
+                className="mt-1 min-h-11 w-full rounded-xl border border-line bg-paper-raised px-2 text-sm text-ink"
+              />
+            </label>
+          </div>
+        ) : null}
+
+        <label className="mt-4 block text-xs font-medium text-ink-faint">
+          Category
+          <select
+            value={categoryId ?? ""}
+            onChange={(event) => onCategoryChange(event.target.value || null)}
+            className="mt-2 min-h-11 w-full rounded-xl border border-line bg-paper-raised px-3 text-sm text-ink focus:border-primary focus:outline-none"
+          >
+            <option value="">All categories</option>
+            {categories.map((category) => (
+              <option key={category.id} value={category.id}>
+                {category.icon} {category.name}
+              </option>
+            ))}
+          </select>
+        </label>
+
+        <div className="mt-5 flex items-center justify-between gap-3 border-t border-line pt-3">
+          <button
+            type="button"
+            onClick={onClear}
+            disabled={period === "month" && categoryId === null}
+            className="min-h-11 px-2 text-sm font-medium text-ink-soft disabled:opacity-40"
+          >
+            Clear filters
+          </button>
+          <button
+            type="button"
+            onClick={onRequestClose}
+            className="min-h-11 rounded-xl bg-primary px-5 text-sm font-semibold text-paper"
+          >
+            Done
+          </button>
+        </div>
+      </div>
+    </dialog>
+  );
+}
+
+function FilterIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path d="M4 6h16M7 12h10m-7 6h4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+    </svg>
   );
 }
 

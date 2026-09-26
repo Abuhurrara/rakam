@@ -37,6 +37,8 @@ func writeError(w http.ResponseWriter, err error) {
 		status = http.StatusBadRequest
 	case errors.Is(err, domain.ErrInvalidMonth):
 		status = http.StatusBadRequest
+	case errors.Is(err, domain.ErrInvalidDateRange):
+		status = http.StatusBadRequest
 	case errors.Is(err, domain.ErrUnauthorized):
 		status = http.StatusUnauthorized
 	case errors.Is(err, domain.ErrInvalidCredentials):

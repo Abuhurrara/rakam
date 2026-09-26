@@ -156,6 +156,9 @@ test("transaction query keys are stable and distinguish filters", () => {
       offset: 0,
     }),
   );
+  assert.notEqual(base, transactionQueryKey({
+    kind: "expense", from: "2026-09-01", to: "2026-09-14", limit: 50, offset: 0,
+  }));
 });
 
 test("persistent query history is bounded to the twenty newest views", () => {

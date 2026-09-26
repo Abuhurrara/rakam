@@ -88,6 +88,12 @@ func handleListTransactions(svc *service.TransactionService) http.HandlerFunc {
 		if month := q.Get("month"); month != "" {
 			params.MonthStr = &month
 		}
+		if from := q.Get("from"); from != "" {
+			params.FromStr = &from
+		}
+		if to := q.Get("to"); to != "" {
+			params.ToStr = &to
+		}
 		if categoryID := q.Get("category_id"); categoryID != "" {
 			params.CategoryID = &categoryID
 		}

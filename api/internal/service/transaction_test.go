@@ -241,6 +241,50 @@ func TestTransactionService_List_KarachiMonthBoundary(t *testing.T) {
 	}
 }
 
+func TestTransactionService_List_KarachiInclusiveDateRange(t *testing.T) {
+	karachi, err := time.LoadLocation("Asia/Karachi")
+	if err != nil {
+		t.Fatal(err)
+	}
+	txRepo := newFakeTransactionRepo()
+	svc := NewTransactionService(txRepo, newFakeCategoryRepo(), karachi)
+	from, to := "2026-09-01", "2026-09-02"
+	_, err = svc.List(context.Background(), "user-1", ListParams{FromStr: &from, ToStr: &to})
+	if err != nil {
+		t.Fatalf("List() error: %v", err)
+	}
+	wantFrom := time.Date(2026, 9, 1, 0, 0, 0, 0, karachi)
+	wantTo := time.Date(2026, 9, 3, 0, 0, 0, 0, karachi)
+	if !txRepo.lastFilter.From.Equal(wantFrom) || !txRepo.lastFilter.To.Equal(wantTo) {
+		t.Fatalf("filter range = [%v, %v); want [%v, %v)", txRepo.lastFilter.From, txRepo.lastFilter.To, wantFrom, wantTo)
+	}
+}
+
+func TestTransactionService_List_RejectsInvalidDateRanges(t *testing.T) {
+	txRepo := newFakeTransactionRepo()
+	svc := NewTransactionService(txRepo, newFakeCategoryRepo(), time.UTC)
+	month, from, to := "2026-09", "2026-09-03", "2026-09-02"
+	tests := []struct {
+		name   string
+		params ListParams
+	}{
+		{"missing through date", ListParams{FromStr: &from}},
+		{"reversed", ListParams{FromStr: &from, ToStr: &to}},
+		{"invalid calendar date", ListParams{FromStr: &from, ToStr: ptr("2026-02-30")}},
+		{"month and dates together", ListParams{MonthStr: &month, FromStr: &from, ToStr: &to}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := svc.List(context.Background(), "user-1", tt.params)
+			if !errors.Is(err, domain.ErrInvalidDateRange) {
+				t.Fatalf("error = %v; want ErrInvalidDateRange", err)
+			}
+		})
+	}
+}
+
+func ptr(value string) *string { return &value }
+
 func TestTransactionService_List_PaginationClamping(t *testing.T) {
 	txRepo := newFakeTransactionRepo()
 	catRepo := newFakeCategoryRepo()
