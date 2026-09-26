@@ -39,8 +39,12 @@ background. The Budget screen was subsequently deployed. It shows the current
 Karachi month, supports past-month limits, and keeps account-scoped month
 snapshots visible while refreshing. This branch changes over-limit display to
 show exact rupees over and counts only limited categories in budget progress;
-that change is not yet deployed. The management areas in More are still
-placeholders.
+The over-limit display is implemented in code, but its production deployment
+status is not tracked in this repository. Category management is implemented on the
+current `category-management` branch and still needs to be merged and deployed.
+Its emoji picker is intentionally curated and currently lacks some useful
+choices, such as school and bill icons. Recurring-bill management remains
+unfinished.
 
 To load the update, close and reopen or reload the installed PWA. Do not clear
 site storage: that would remove any unfinished local drafts.
@@ -84,7 +88,7 @@ make run
 For legacy local sample data only, `make seed` also needs `SEED_EMAIL` and
 `SEED_PASSWORD` in `api/.env`; it creates example categories and people.
 
-There is no public signup route. To create a private, empty account for a friend, apply migrations and run:
+There is no public signup route. To create a private account for a friend, apply migrations and run:
 
 ```sh
 cd api
@@ -93,9 +97,15 @@ make user-create EMAIL=friend@example.com NAME="Friend Name"
 ```
 
 The command prompts for a password twice without echoing it. Passwords must be
-12–72 bytes. It only creates the account; it does not create categories,
-people, budgets, or finance data. New users can record uncategorized expenses
-until category management is available. To reset an account password:
+12–72 bytes. It creates the account and its 15 standard categories, but no
+people, budgets, bills, or transactions. To add defaults to an existing account
+only when it has no categories:
+
+```sh
+make user-seed-categories EMAIL=friend@example.com
+```
+
+To reset an account password:
 
 ```sh
 make user-reset-password EMAIL=friend@example.com
@@ -244,12 +254,18 @@ missing, which is deliberate.
 ## Known gaps
 
 - **Work log does not exist yet** on either side. `WorkLogRepo` is in
-  `SPEC.md` but was never built. Recurring-bill/category management screens
-  remain unfinished. The Budget overage change still needs deployment.
+  `SPEC.md` but was never built. Recurring-bill API support exists, but its
+  management screen remains unfinished. The category-management branch needs
+  merge and deployment; its emoji picker could use more options for categories
+  such as school fees and bills. Confirm the Budget overage change is deployed
+  before treating it as live.
 - Full offline editing and automatic background sync are not implemented.
   Failed create/update requests retain a local draft for manual retry after
   reconnecting. An offline page load shows the offline fallback.
 - Public signup and email-based password recovery are not implemented. The owner provisions accounts with the CLI; users may change their own password from More.
+- Account invitations are deferred. The app is currently invite-only through
+  owner-run account provisioning.
+- Installation and use on a physical Android phone still need verification.
 
 
 ## Reliable saves and expense totals

@@ -136,6 +136,7 @@ GET    /api/categories
 POST   /api/categories
 PATCH  /api/categories/{id}
 DELETE /api/categories/{id}          archives, does not hard delete
+POST   /api/categories/{id}/restore  restores an archived category
 
 GET    /api/transactions             ?kind=expense&month=2026-08&category_id=&q=&limit=50&offset=0
 POST   /api/transactions
@@ -190,7 +191,7 @@ Call it from `GET /api/summary`. No scheduler, no cron.
 
 ## Auth
 
-Private accounts only: there is no public signup route or in-app account management. The trusted owner creates an empty account with `go run ./cmd/user create --email ... --name ...`; password input is hidden and confirmed in the terminal. Passwords are bcrypt-hashed. The owner can reset one with `go run ./cmd/user reset-password --email ...`. Users may optionally change their own password in More. Password change/reset increments a per-user session version, invalidating existing sessions on their next request while issuing a fresh session to the device that changed its own password. Emails are trimmed and case-insensitive unique. New accounts receive no categories, people, transactions, budgets, or bills.
+Private accounts only: there is no public signup route or in-app account management. The trusted owner creates an account with `go run ./cmd/user create --email ... --name ...`; password input is hidden and confirmed in the terminal. Passwords are bcrypt-hashed. New accounts receive the standard 12 expense and 3 income categories, but no people, transactions, budgets, or bills. Existing empty accounts can be backfilled with `go run ./cmd/user seed-categories --email ...`; accounts with any category are left untouched. The owner can reset a password with `go run ./cmd/user reset-password --email ...`. Users may optionally change their own password in More. Password change/reset increments a per-user session version, invalidating existing sessions on their next request while issuing a fresh session to the device that changed its own password. Emails are trimmed and case-insensitive unique.
 
 The legacy `cmd/seed` exists only for development fixtures; it creates default categories and people and must not be used to provision a friend's production account.
 
@@ -293,12 +294,16 @@ Load config once at startup into a struct and fail fast with a clear message if 
 ## Implementation status
 
 The phases below describe the intended product, not a claim that every screen
-is complete. See [README.md](README.md#live-release--september-9-2026) for the
-September 9 release and verified behavior. Home, Expenses and export are
-available; Ledger and Budget are now available as well. The Budget overage
-change in the current code has not yet been deployed.
-Recurring-bill/category management and work-log UI/API remain unfinished.
-Account invitations are deferred.
+is complete. Home, Expenses, Ledger, Budget, Categories and export are
+implemented in the repository. Category management is on the current
+`category-management` branch and still needs to be merged and deployed. Its
+emoji picker is curated and could use more options for categories such as
+school fees and bills. The Budget overage change is implemented in code, but
+its production deployment status is not tracked here. Recurring-bill API
+support exists, but its management screen is unfinished. Work-log UI/API,
+full offline editing and automatic sync, public signup, and email-based
+password recovery remain unfinished; account invitations are deferred.
+Physical Android installation still needs verification.
 
 ## Build phases
 

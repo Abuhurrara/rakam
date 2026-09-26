@@ -3,6 +3,7 @@ import type {
   BudgetInput,
   BudgetWithSpent,
   Category,
+  CategoryInput,
   DebtEntry,
   DebtEntryInput,
   Person,
@@ -206,13 +207,30 @@ export function health(signal?: AbortSignal): Promise<Health> {
 
 /* ------------------------------------------------------------ categories */
 
-/**
- * The API returns archived categories too (it filters only by user_id), so
- * they are dropped here rather than in every screen that lists them.
- */
-export async function listCategories(): Promise<Category[]> {
-  const all = await apiFetch<Category[]>("/api/categories");
-  return all.filter((c) => !c.is_archived);
+/** Returns active and archived categories for management and history labels. */
+export function listCategories(): Promise<Category[]> {
+	return apiFetch<Category[]>("/api/categories");
+}
+
+export function createCategory(input: CategoryInput): Promise<Category> {
+	return apiFetch<Category>("/api/categories", { method: "POST", body: input });
+}
+
+export function updateCategory(id: string, input: CategoryInput): Promise<Category> {
+	return apiFetch<Category>(`/api/categories/${encodeURIComponent(id)}`, {
+		method: "PATCH",
+		body: input,
+	});
+}
+
+export function archiveCategory(id: string): Promise<null> {
+	return apiFetch<null>(`/api/categories/${encodeURIComponent(id)}`, { method: "DELETE" });
+}
+
+export function restoreCategory(id: string): Promise<Category> {
+	return apiFetch<Category>(`/api/categories/${encodeURIComponent(id)}/restore`, {
+		method: "POST",
+	});
 }
 
 /* -------------------------------------------------------------- ledger */

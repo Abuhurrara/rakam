@@ -39,7 +39,7 @@ func TestPrivateAccountHTTPFlowWithPostgres(t *testing.T) {
 	resetPassword := "third-secure-password"
 	user, err := admin.Create(ctx, email, "Flow Test", initialPassword)
 	if err != nil {
-		t.Fatalf("creating empty account: %v", err)
+		t.Fatalf("creating account: %v", err)
 	}
 	t.Cleanup(func() { _, _ = pool.Exec(context.Background(), `delete from users where id = $1`, user.ID) })
 
@@ -52,8 +52,12 @@ func TestPrivateAccountHTTPFlowWithPostgres(t *testing.T) {
 		if err := pool.QueryRow(ctx, query, user.ID).Scan(check.count); err != nil {
 			t.Fatalf("counting new account's %s: %v", check.table, err)
 		}
-		if *check.count != 0 {
-			t.Fatalf("new account has %d %s rows, want none", *check.count, check.table)
+		want := 0
+		if check.table == "categories" {
+			want = 15
+		}
+		if *check.count != want {
+			t.Fatalf("new account has %d %s rows, want %d", *check.count, check.table, want)
 		}
 	}
 

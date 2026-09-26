@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"golang.org/x/crypto/bcrypt"
 
@@ -86,6 +87,30 @@ func Seed(ctx context.Context, pool *pgxpool.Pool, cfg config.Config) error {
 func seedCategories(ctx context.Context, pool *pgxpool.Pool, userID string, kind domain.Kind, categories []seedCategory) error {
 	for i, c := range categories {
 		if _, err := pool.Exec(ctx, `
+			insert into categories (user_id, name, kind, icon, color, sort_order)
+			values ($1, $2, $3, $4, $5, $6)
+			on conflict (user_id, name, kind) do nothing
+		`, userID, c.name, kind, c.icon, c.color, i); err != nil {
+			return fmt.Errorf("seeding category %q: %w", c.name, err)
+		}
+	}
+	return nil
+}
+
+type categoryExecer interface {
+	Exec(context.Context, string, ...any) (pgconn.CommandTag, error)
+}
+
+func seedDefaultCategories(ctx context.Context, exec categoryExecer, userID string) error {
+	if err := seedCategoryRows(ctx, exec, userID, domain.KindExpense, seedExpenseCategories); err != nil {
+		return err
+	}
+	return seedCategoryRows(ctx, exec, userID, domain.KindIncome, seedIncomeCategories)
+}
+
+func seedCategoryRows(ctx context.Context, exec categoryExecer, userID string, kind domain.Kind, categories []seedCategory) error {
+	for i, c := range categories {
+		if _, err := exec.Exec(ctx, `
 			insert into categories (user_id, name, kind, icon, color, sort_order)
 			values ($1, $2, $3, $4, $5, $6)
 			on conflict (user_id, name, kind) do nothing

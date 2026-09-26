@@ -37,6 +37,10 @@ func main() {
 		flags := flag.NewFlagSet("reset-password", flag.ExitOnError)
 		flags.StringVar(&email, "email", "", "account email")
 		_ = flags.Parse(os.Args[2:])
+	case "seed-categories":
+		flags := flag.NewFlagSet("seed-categories", flag.ExitOnError)
+		flags.StringVar(&email, "email", "", "account email")
+		_ = flags.Parse(os.Args[2:])
 	default:
 		usage()
 	}
@@ -49,6 +53,22 @@ func main() {
 		log.Fatalf("connecting to database: %v", err)
 	}
 	defer pool.Close()
+	if os.Args[1] == "seed-categories" {
+		user, err := postgres.NewUserRepo(pool).GetByEmail(ctx, strings.ToLower(strings.TrimSpace(email)))
+		if err != nil {
+			log.Fatalf("looking up account: %v", err)
+		}
+		seeded, err := postgres.NewCategoryRepo(pool).SeedDefaultsIfEmpty(ctx, user.ID)
+		if err != nil {
+			log.Fatalf("seeding default categories: %v", err)
+		}
+		if seeded {
+			fmt.Printf("Added standard categories to %s.\n", user.Email)
+		} else {
+			fmt.Printf("Skipped %s: the account already has categories.\n", user.Email)
+		}
+		return
+	}
 	password, err := readConfirmedPassword(os.Stdin, os.Stderr)
 	if err != nil {
 		log.Fatalf("reading password: %v", err)
@@ -60,7 +80,7 @@ func main() {
 		if _, err := admin.Create(ctx, email, name, password); err != nil {
 			log.Fatalf("creating account: %v", err)
 		}
-		fmt.Printf("Created empty account for %s.\n", strings.ToLower(strings.TrimSpace(email)))
+		fmt.Printf("Created account with standard categories for %s.\n", strings.ToLower(strings.TrimSpace(email)))
 		return
 	}
 	if err := admin.ResetPassword(ctx, email, password); err != nil {
@@ -72,6 +92,7 @@ func main() {
 func usage() {
 	fmt.Fprintln(os.Stderr, "Usage: go run ./cmd/user create --email friend@example.com --name Friend")
 	fmt.Fprintln(os.Stderr, "   or: go run ./cmd/user reset-password --email friend@example.com")
+	fmt.Fprintln(os.Stderr, "   or: go run ./cmd/user seed-categories --email friend@example.com")
 	os.Exit(2)
 }
 

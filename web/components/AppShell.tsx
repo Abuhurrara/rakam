@@ -128,7 +128,7 @@ export function AppShell({ children }: { children: ReactNode }) {
 
   return (
     <ToastProvider>
-      <CategoriesProvider enabled={ready}>
+      <CategoriesProvider key={userID ?? "waiting"} enabled={ready}>
         <FinanceDataProvider key={userID ?? "waiting"} userID={userID}>
           <LedgerDataProvider key={userID ?? "waiting"} userID={userID}>
             <SavesProvider key={userID ?? "waiting"} userID={userID}>

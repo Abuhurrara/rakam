@@ -127,3 +127,16 @@ func handleArchiveCategory(svc *service.CategoryService) http.HandlerFunc {
 		w.WriteHeader(http.StatusNoContent)
 	}
 }
+
+func handleRestoreCategory(svc *service.CategoryService) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		userID, _ := UserIDFromContext(r.Context())
+		category, err := svc.Restore(r.Context(), userID, r.PathValue("id"))
+		if err != nil {
+			writeError(w, err)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(toCategoryResponse(category))
+	}
+}

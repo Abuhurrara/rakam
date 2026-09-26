@@ -6,6 +6,8 @@ var (
 	ErrIdempotencyConflict    = errors.New("save identifier already used for a different entry")
 	ErrNotFound               = errors.New("not found")
 	ErrInvalidCategory        = errors.New("invalid category")
+	ErrDuplicateCategory      = errors.New("category name already exists")
+	ErrCategoryInUse          = errors.New("category is used by an active recurring bill")
 	ErrInvalidCredentials     = errors.New("invalid credentials")
 	ErrInvalidCurrentPassword = errors.New("current password is incorrect")
 	ErrInvalidPassword        = errors.New("password must be between 12 and 72 bytes")

@@ -64,14 +64,26 @@ func (r *UserRepo) GetSessionVersion(ctx context.Context, id string) (int, error
 }
 
 func (r *UserRepo) Create(ctx context.Context, email, name, passwordHash string) (domain.User, error) {
+	tx, err := r.pool.Begin(ctx)
+	if err != nil {
+		return domain.User{}, fmt.Errorf("beginning account creation: %w", err)
+	}
+	defer tx.Rollback(ctx)
+
 	var u domain.User
-	err := r.pool.QueryRow(ctx, `
+	err = tx.QueryRow(ctx, `
 		insert into users (email, password_hash, name)
 		values ($1, $2, $3)
 		returning id, email, password_hash, name, session_version, created_at, updated_at
 	`, email, passwordHash, name).Scan(&u.ID, &u.Email, &u.PasswordHash, &u.Name, &u.SessionVersion, &u.CreatedAt, &u.UpdatedAt)
 	if err != nil {
 		return domain.User{}, fmt.Errorf("creating user: %w", err)
+	}
+	if err := seedDefaultCategories(ctx, tx, u.ID); err != nil {
+		return domain.User{}, fmt.Errorf("adding default categories to new account: %w", err)
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return domain.User{}, fmt.Errorf("committing account creation: %w", err)
 	}
 	return u, nil
 }

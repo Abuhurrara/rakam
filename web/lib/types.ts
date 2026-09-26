@@ -26,6 +26,14 @@ export type Category = {
   updated_at: string;
 };
 
+export type CategoryInput = {
+  name: string;
+  kind: Kind;
+  icon: string;
+  color: string;
+  sort_order: number;
+};
+
 /**
  * api/internal/httpapi/transaction.go — transactionResponse.
  * Note `amount_paisa`: an integer, never a formatted string.
