@@ -242,7 +242,7 @@ dialog.expense-filter-sheet[open].is-closing::backdrop {
 }
 
 .expense-category-menu {
-  transform-origin: bottom center;
+  transform-origin: top center;
   animation: expense-category-menu-enter 180ms cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
