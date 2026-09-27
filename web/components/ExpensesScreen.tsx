@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useId, useMemo, useRef, useState } from "react";
+import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { ApiError, listTransactions } from "@/lib/api";
 import { formatPaisa, sumPaisa } from "@/lib/money";
 import {
@@ -700,11 +700,13 @@ function CategoryOption({
   label,
   icon,
   selected,
+  animationIndex,
   onClick,
 }: {
   label: string;
   icon: string;
   selected: boolean;
+  animationIndex: number;
   onClick: () => void;
 }) {
   return (
@@ -712,7 +714,8 @@ function CategoryOption({
       type="button"
       onClick={onClick}
       aria-pressed={selected}
-      className={`flex min-h-11 w-full items-center gap-3 rounded-xl px-3 text-left text-sm ${
+      style={{ animationDelay: `${Math.min(animationIndex, 8) * 18}ms` }}
+      className={`expense-category-option flex min-h-11 w-full items-center gap-3 rounded-xl px-3 text-left text-sm transition-[background-color,transform] duration-150 active:scale-[0.99] ${
         selected
           ? "bg-primary-tint font-medium text-ink"
           : "text-ink-soft hover:bg-paper-sunken"
@@ -793,6 +796,7 @@ function ExpenseFilterSheet({
 }) {
   const dialogRef = useRef<HTMLDialogElement>(null);
   const categoryButtonRef = useRef<HTMLButtonElement>(null);
+  const expectedCloseEventRef = useRef(false);
   const titleId = useId();
   const [categoryMenuOpen, setCategoryMenuOpen] = useState(false);
   const [closing, setClosing] = useState(false);
@@ -803,14 +807,14 @@ function ExpenseFilterSheet({
     setClosing(true);
   }
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const dialog = dialogRef.current;
     if (!dialog) return;
-    if (open && !dialog.open) {
-      setClosing(false);
-      dialog.showModal();
+    if (open && !dialog.open) dialog.showModal();
+    if (!open && dialog.open) {
+      expectedCloseEventRef.current = true;
+      dialog.close();
     }
-    if (!open && dialog.open) dialog.close();
   }, [open]);
 
   function chooseCategory(id: string | null) {
@@ -838,7 +842,11 @@ function ExpenseFilterSheet({
         }
       }}
       onClose={() => {
-        if (open) closeSheet();
+        const expectedClose = expectedCloseEventRef.current;
+        expectedCloseEventRef.current = false;
+        setClosing(false);
+        setCategoryMenuOpen(false);
+        if (open && !expectedClose) onRequestClose();
       }}
       onAnimationEnd={(event) => {
         if (
@@ -861,7 +869,7 @@ function ExpenseFilterSheet({
       }}
       className={`expense-filter-sheet fixed inset-x-0 bottom-0 top-auto m-0 mx-auto w-full max-w-lg rounded-t-3xl border border-line bg-paper p-0 text-ink shadow-2xl backdrop:bg-overlay ${closing ? "is-closing" : ""}`}
     >
-      <div className="max-h-[82dvh] overflow-y-auto px-4 pt-4 pb-[calc(env(safe-area-inset-bottom,0px)+1rem)] sm:max-h-[min(80dvh,38rem)]">
+      <div className="expense-filter-sheet-content max-h-[82dvh] overflow-y-auto px-4 pt-4 pb-[calc(env(safe-area-inset-bottom,0px)+1rem)] sm:max-h-[min(80dvh,38rem)]">
         <div className="flex items-center justify-between gap-3">
           <div>
             <h2 id={titleId} className="text-lg font-semibold">
@@ -907,14 +915,16 @@ function ExpenseFilterSheet({
                 label="All categories"
                 icon="◉"
                 selected={categoryId === null}
+                animationIndex={0}
                 onClick={() => chooseCategory(null)}
               />
-              {categories.map((category) => (
+              {categories.map((category, index) => (
                 <CategoryOption
                   key={category.id}
                   label={category.name}
                   icon={category.icon}
                   selected={categoryId === category.id}
+                  animationIndex={index + 1}
                   onClick={() => chooseCategory(category.id)}
                 />
               ))}
