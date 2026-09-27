@@ -792,12 +792,21 @@ function ExpenseFilterSheet({
   onClear: () => void;
 }) {
   const dialogRef = useRef<HTMLDialogElement>(null);
+  const categoryButtonRef = useRef<HTMLButtonElement>(null);
+  const closeTimerRef = useRef<number | null>(null);
   const titleId = useId();
   const [categoryMenuOpen, setCategoryMenuOpen] = useState(false);
+  const [closing, setClosing] = useState(false);
 
   function closeSheet() {
+    if (closeTimerRef.current !== null) return;
     setCategoryMenuOpen(false);
-    onRequestClose();
+    setClosing(true);
+    closeTimerRef.current = window.setTimeout(() => {
+      closeTimerRef.current = null;
+      setClosing(false);
+      onRequestClose();
+    }, 190);
   }
 
   useEffect(() => {
@@ -806,6 +815,21 @@ function ExpenseFilterSheet({
     if (open && !dialog.open) dialog.showModal();
     if (!open && dialog.open) dialog.close();
   }, [open]);
+
+  useEffect(
+    () => () => {
+      if (closeTimerRef.current !== null) {
+        window.clearTimeout(closeTimerRef.current);
+      }
+    },
+    [],
+  );
+
+  function chooseCategory(id: string | null) {
+    onCategoryChange(id);
+    setCategoryMenuOpen(false);
+    categoryButtonRef.current?.focus();
+  }
 
   const selectedCategory = categories.find(
     (category) => category.id === categoryId,
@@ -818,15 +842,28 @@ function ExpenseFilterSheet({
       aria-labelledby={titleId}
       onCancel={(event) => {
         event.preventDefault();
-        closeSheet();
+        if (categoryMenuOpen) {
+          setCategoryMenuOpen(false);
+          categoryButtonRef.current?.focus();
+        } else {
+          closeSheet();
+        }
       }}
       onClose={() => {
         if (open) closeSheet();
       }}
       onClick={(event) => {
-        if (event.target === event.currentTarget) closeSheet();
+        if (event.target === event.currentTarget) {
+          closeSheet();
+        } else if (
+          categoryMenuOpen &&
+          event.target instanceof Element &&
+          !event.target.closest("[data-category-picker]")
+        ) {
+          setCategoryMenuOpen(false);
+        }
       }}
-      className="expense-filter-sheet fixed inset-x-0 bottom-0 m-0 mx-auto w-full max-w-lg rounded-t-3xl border border-line bg-paper p-0 text-ink shadow-2xl backdrop:bg-overlay"
+      className={`expense-filter-sheet fixed inset-x-0 bottom-0 top-auto m-0 mx-auto w-full max-w-lg rounded-t-3xl border border-line bg-paper p-0 text-ink shadow-2xl backdrop:bg-overlay ${closing ? "is-closing" : ""}`}
     >
       <div className="max-h-[82dvh] overflow-y-auto px-4 pt-4 pb-[calc(env(safe-area-inset-bottom,0px)+1rem)] sm:max-h-[min(80dvh,38rem)]">
         <div className="flex items-center justify-between gap-3">
@@ -904,9 +941,10 @@ function ExpenseFilterSheet({
           </div>
         ) : null}
 
-        <div className="relative mt-4">
+        <div className="relative mt-4" data-category-picker>
           <p className="mb-2 text-xs font-medium text-ink-faint">Category</p>
           <button
+            ref={categoryButtonRef}
             type="button"
             aria-label={`Category: ${selectedCategory?.name ?? "All categories"}`}
             aria-expanded={categoryMenuOpen}
@@ -923,23 +961,13 @@ function ExpenseFilterSheet({
             <div
               id="expense-category-options"
               aria-label="Choose a category"
-              onKeyDown={(event) => {
-                if (event.key === "Escape") {
-                  event.preventDefault();
-                  event.stopPropagation();
-                  setCategoryMenuOpen(false);
-                }
-              }}
-              className="expense-category-menu absolute inset-x-0 top-full z-10 mt-2 max-h-60 overflow-y-auto rounded-2xl border border-line bg-paper-raised p-1.5 shadow-xl"
+              className="expense-category-menu absolute inset-x-0 bottom-full z-10 mb-2 max-h-56 overflow-y-auto rounded-2xl border border-line bg-paper-raised p-1.5 shadow-xl"
             >
               <CategoryOption
                 label="All categories"
                 icon="◉"
                 selected={categoryId === null}
-                onClick={() => {
-                  onCategoryChange(null);
-                  setCategoryMenuOpen(false);
-                }}
+                onClick={() => chooseCategory(null)}
               />
               {categories.map((category) => (
                 <CategoryOption
@@ -947,10 +975,7 @@ function ExpenseFilterSheet({
                   label={category.name}
                   icon={category.icon}
                   selected={categoryId === category.id}
-                  onClick={() => {
-                    onCategoryChange(category.id);
-                    setCategoryMenuOpen(false);
-                  }}
+                  onClick={() => chooseCategory(category.id)}
                 />
               ))}
             </div>
