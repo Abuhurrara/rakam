@@ -696,6 +696,72 @@ function AppliedFilter({
   );
 }
 
+function CategoryOption({
+  label,
+  icon,
+  selected,
+  onClick,
+}: {
+  label: string;
+  icon: string;
+  selected: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={selected}
+      className={`flex min-h-11 w-full items-center gap-3 rounded-xl px-3 text-left text-sm ${
+        selected
+          ? "bg-primary-tint font-medium text-ink"
+          : "text-ink-soft hover:bg-paper-sunken"
+      }`}
+    >
+      <span aria-hidden="true" className="w-5 text-center text-base">
+        {icon}
+      </span>
+      <span className="min-w-0 flex-1 truncate">{label}</span>
+      {selected ? <CheckIcon /> : null}
+    </button>
+  );
+}
+
+function CategoryChevron({ expanded }: { expanded: boolean }) {
+  return (
+    <svg
+      width="18"
+      height="18"
+      viewBox="0 0 24 24"
+      fill="none"
+      aria-hidden="true"
+      className={`transition-transform duration-150 ${expanded ? "rotate-180" : ""}`}
+    >
+      <path
+        d="m7 10 5 5 5-5"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+function CheckIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path
+        d="m5 12 4 4L19 6"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
 function ExpenseFilterSheet({
   open,
   onRequestClose,
@@ -727,6 +793,12 @@ function ExpenseFilterSheet({
 }) {
   const dialogRef = useRef<HTMLDialogElement>(null);
   const titleId = useId();
+  const [categoryMenuOpen, setCategoryMenuOpen] = useState(false);
+
+  function closeSheet() {
+    setCategoryMenuOpen(false);
+    onRequestClose();
+  }
 
   useEffect(() => {
     const dialog = dialogRef.current;
@@ -735,6 +807,10 @@ function ExpenseFilterSheet({
     if (!open && dialog.open) dialog.close();
   }, [open]);
 
+  const selectedCategory = categories.find(
+    (category) => category.id === categoryId,
+  );
+
   return (
     <dialog
       ref={dialogRef}
@@ -742,15 +818,15 @@ function ExpenseFilterSheet({
       aria-labelledby={titleId}
       onCancel={(event) => {
         event.preventDefault();
-        onRequestClose();
+        closeSheet();
       }}
       onClose={() => {
-        if (open) onRequestClose();
+        if (open) closeSheet();
       }}
       onClick={(event) => {
-        if (event.target === event.currentTarget) onRequestClose();
+        if (event.target === event.currentTarget) closeSheet();
       }}
-      className="fixed inset-x-0 bottom-0 m-0 w-full max-w-lg rounded-t-3xl border border-line bg-paper p-0 text-ink shadow-2xl backdrop:bg-overlay sm:inset-auto sm:left-1/2 sm:top-1/2 sm:w-[min(28rem,calc(100%-2rem))] sm:-translate-x-1/2 sm:-translate-y-1/2 sm:rounded-3xl"
+      className="expense-filter-sheet fixed inset-x-0 bottom-0 m-0 mx-auto w-full max-w-lg rounded-t-3xl border border-line bg-paper p-0 text-ink shadow-2xl backdrop:bg-overlay"
     >
       <div className="max-h-[82dvh] overflow-y-auto px-4 pt-4 pb-[calc(env(safe-area-inset-bottom,0px)+1rem)] sm:max-h-[min(80dvh,38rem)]">
         <div className="flex items-center justify-between gap-3">
@@ -764,7 +840,7 @@ function ExpenseFilterSheet({
           </div>
           <button
             type="button"
-            onClick={onRequestClose}
+            onClick={closeSheet}
             aria-label="Close filters"
             className="-mr-2 min-h-11 min-w-11 rounded-full text-xl text-ink-soft"
           >
@@ -828,21 +904,58 @@ function ExpenseFilterSheet({
           </div>
         ) : null}
 
-        <label className="mt-4 block text-xs font-medium text-ink-faint">
-          Category
-          <select
-            value={categoryId ?? ""}
-            onChange={(event) => onCategoryChange(event.target.value || null)}
-            className="mt-2 min-h-11 w-full rounded-xl border border-line bg-paper-raised px-3 text-sm text-ink focus:border-primary focus:outline-none"
+        <div className="relative mt-4">
+          <p className="mb-2 text-xs font-medium text-ink-faint">Category</p>
+          <button
+            type="button"
+            aria-label={`Category: ${selectedCategory?.name ?? "All categories"}`}
+            aria-expanded={categoryMenuOpen}
+            aria-controls="expense-category-options"
+            onClick={() => setCategoryMenuOpen((isOpen) => !isOpen)}
+            className="flex min-h-11 w-full items-center justify-between rounded-xl border border-line bg-paper-raised px-3 text-left text-sm text-ink focus:border-primary focus:outline-none"
           >
-            <option value="">All categories</option>
-            {categories.map((category) => (
-              <option key={category.id} value={category.id}>
-                {category.icon} {category.name}
-              </option>
-            ))}
-          </select>
-        </label>
+            <span>
+              {selectedCategory?.icon ?? "◉"} {selectedCategory?.name ?? "All categories"}
+            </span>
+            <CategoryChevron expanded={categoryMenuOpen} />
+          </button>
+          {categoryMenuOpen ? (
+            <div
+              id="expense-category-options"
+              aria-label="Choose a category"
+              onKeyDown={(event) => {
+                if (event.key === "Escape") {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  setCategoryMenuOpen(false);
+                }
+              }}
+              className="expense-category-menu absolute inset-x-0 top-full z-10 mt-2 max-h-60 overflow-y-auto rounded-2xl border border-line bg-paper-raised p-1.5 shadow-xl"
+            >
+              <CategoryOption
+                label="All categories"
+                icon="◉"
+                selected={categoryId === null}
+                onClick={() => {
+                  onCategoryChange(null);
+                  setCategoryMenuOpen(false);
+                }}
+              />
+              {categories.map((category) => (
+                <CategoryOption
+                  key={category.id}
+                  label={category.name}
+                  icon={category.icon}
+                  selected={categoryId === category.id}
+                  onClick={() => {
+                    onCategoryChange(category.id);
+                    setCategoryMenuOpen(false);
+                  }}
+                />
+              ))}
+            </div>
+          ) : null}
+        </div>
 
         <div className="mt-5 flex items-center justify-between gap-3 border-t border-line pt-3">
           <button
@@ -855,7 +968,7 @@ function ExpenseFilterSheet({
           </button>
           <button
             type="button"
-            onClick={onRequestClose}
+            onClick={closeSheet}
             className="min-h-11 rounded-xl bg-primary px-5 text-sm font-semibold text-paper"
           >
             Done
