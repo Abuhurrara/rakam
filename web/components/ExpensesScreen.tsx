@@ -793,37 +793,25 @@ function ExpenseFilterSheet({
 }) {
   const dialogRef = useRef<HTMLDialogElement>(null);
   const categoryButtonRef = useRef<HTMLButtonElement>(null);
-  const closeTimerRef = useRef<number | null>(null);
   const titleId = useId();
   const [categoryMenuOpen, setCategoryMenuOpen] = useState(false);
   const [closing, setClosing] = useState(false);
 
   function closeSheet() {
-    if (closeTimerRef.current !== null) return;
+    if (closing) return;
     setCategoryMenuOpen(false);
     setClosing(true);
-    closeTimerRef.current = window.setTimeout(() => {
-      closeTimerRef.current = null;
-      setClosing(false);
-      onRequestClose();
-    }, 190);
   }
 
   useEffect(() => {
     const dialog = dialogRef.current;
     if (!dialog) return;
-    if (open && !dialog.open) dialog.showModal();
+    if (open && !dialog.open) {
+      setClosing(false);
+      dialog.showModal();
+    }
     if (!open && dialog.open) dialog.close();
   }, [open]);
-
-  useEffect(
-    () => () => {
-      if (closeTimerRef.current !== null) {
-        window.clearTimeout(closeTimerRef.current);
-      }
-    },
-    [],
-  );
 
   function chooseCategory(id: string | null) {
     onCategoryChange(id);
@@ -851,6 +839,14 @@ function ExpenseFilterSheet({
       }}
       onClose={() => {
         if (open) closeSheet();
+      }}
+      onAnimationEnd={(event) => {
+        if (
+          event.target === event.currentTarget &&
+          event.animationName === "expense-filter-sheet-exit"
+        ) {
+          onRequestClose();
+        }
       }}
       onClick={(event) => {
         if (event.target === event.currentTarget) {
@@ -883,6 +879,47 @@ function ExpenseFilterSheet({
           >
             ×
           </button>
+        </div>
+
+        <div className="relative mt-4" data-category-picker>
+          <p className="mb-2 text-xs font-medium text-ink-faint">Category</p>
+          <button
+            ref={categoryButtonRef}
+            type="button"
+            aria-label={`Category: ${selectedCategory?.name ?? "All categories"}`}
+            aria-expanded={categoryMenuOpen}
+            aria-controls="expense-category-options"
+            onClick={() => setCategoryMenuOpen((isOpen) => !isOpen)}
+            className="flex min-h-11 w-full items-center justify-between rounded-xl border border-line bg-paper-raised px-3 text-left text-sm text-ink focus:border-primary focus:outline-none"
+          >
+            <span>
+              {selectedCategory?.icon ?? "◉"} {selectedCategory?.name ?? "All categories"}
+            </span>
+            <CategoryChevron expanded={categoryMenuOpen} />
+          </button>
+          {categoryMenuOpen ? (
+            <div
+              id="expense-category-options"
+              aria-label="Choose a category"
+              className="expense-category-menu mt-2 max-h-56 overflow-y-auto overscroll-contain rounded-2xl border border-line bg-paper-raised p-1.5 shadow-xl"
+            >
+              <CategoryOption
+                label="All categories"
+                icon="◉"
+                selected={categoryId === null}
+                onClick={() => chooseCategory(null)}
+              />
+              {categories.map((category) => (
+                <CategoryOption
+                  key={category.id}
+                  label={category.name}
+                  icon={category.icon}
+                  selected={categoryId === category.id}
+                  onClick={() => chooseCategory(category.id)}
+                />
+              ))}
+            </div>
+          ) : null}
         </div>
 
         <fieldset className="mt-5">
@@ -940,47 +977,6 @@ function ExpenseFilterSheet({
             </label>
           </div>
         ) : null}
-
-        <div className="relative mt-4" data-category-picker>
-          <p className="mb-2 text-xs font-medium text-ink-faint">Category</p>
-          <button
-            ref={categoryButtonRef}
-            type="button"
-            aria-label={`Category: ${selectedCategory?.name ?? "All categories"}`}
-            aria-expanded={categoryMenuOpen}
-            aria-controls="expense-category-options"
-            onClick={() => setCategoryMenuOpen((isOpen) => !isOpen)}
-            className="flex min-h-11 w-full items-center justify-between rounded-xl border border-line bg-paper-raised px-3 text-left text-sm text-ink focus:border-primary focus:outline-none"
-          >
-            <span>
-              {selectedCategory?.icon ?? "◉"} {selectedCategory?.name ?? "All categories"}
-            </span>
-            <CategoryChevron expanded={categoryMenuOpen} />
-          </button>
-          {categoryMenuOpen ? (
-            <div
-              id="expense-category-options"
-              aria-label="Choose a category"
-              className="expense-category-menu absolute inset-x-0 bottom-full z-10 mb-2 max-h-56 overflow-y-auto rounded-2xl border border-line bg-paper-raised p-1.5 shadow-xl"
-            >
-              <CategoryOption
-                label="All categories"
-                icon="◉"
-                selected={categoryId === null}
-                onClick={() => chooseCategory(null)}
-              />
-              {categories.map((category) => (
-                <CategoryOption
-                  key={category.id}
-                  label={category.name}
-                  icon={category.icon}
-                  selected={categoryId === category.id}
-                  onClick={() => chooseCategory(category.id)}
-                />
-              ))}
-            </div>
-          ) : null}
-        </div>
 
         <div className="mt-5 flex items-center justify-between gap-3 border-t border-line pt-3">
           <button
