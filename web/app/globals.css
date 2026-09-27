@@ -175,12 +175,8 @@
 
 @keyframes expense-filter-sheet-enter {
   from {
-    opacity: 0.9;
-    transform: translate3d(0, 100%, 0) scale(0.985);
-  }
-  76% {
-    opacity: 1;
-    transform: translate3d(0, -0.25rem, 0) scale(1);
+    opacity: 0.96;
+    transform: translate3d(0, 1.5rem, 0) scale(0.99);
   }
   to {
     opacity: 1;
@@ -211,11 +207,35 @@
 @keyframes expense-category-menu-enter {
   from {
     opacity: 0;
-    transform: translateY(0.35rem) scale(0.99);
+    max-height: 0;
+    transform: translateY(-0.4rem) scale(0.985);
   }
   to {
     opacity: 1;
+    max-height: 14rem;
     transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes expense-category-option-enter {
+  from {
+    opacity: 0;
+    transform: translateY(0.3rem);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes expense-filter-content-enter {
+  from {
+    opacity: 0.7;
+    transform: translateY(0.5rem);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
   }
 }
 
@@ -226,24 +246,32 @@ dialog.expense-filter-sheet[open] {
   max-height: 90dvh;
   margin: 0 auto;
   overflow: visible;
-  animation: expense-filter-sheet-enter 360ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  animation: expense-filter-sheet-enter 320ms cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
 dialog.expense-filter-sheet[open].is-closing {
-  animation: expense-filter-sheet-exit 190ms cubic-bezier(0.4, 0, 1, 1) both;
+  animation: expense-filter-sheet-exit 200ms cubic-bezier(0.4, 0, 1, 1) both;
 }
 
 dialog.expense-filter-sheet[open]::backdrop {
-  animation: expense-filter-backdrop-enter 240ms ease-out both;
+  animation: expense-filter-backdrop-enter 260ms ease-out both;
 }
 
 dialog.expense-filter-sheet[open].is-closing::backdrop {
-  animation: expense-filter-backdrop-enter 190ms ease-in reverse both;
+  animation: expense-filter-backdrop-enter 200ms ease-in reverse both;
+}
+
+.expense-filter-sheet-content {
+  animation: expense-filter-content-enter 260ms 50ms cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
 .expense-category-menu {
   transform-origin: top center;
-  animation: expense-category-menu-enter 180ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  animation: expense-category-menu-enter 260ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.expense-category-option {
+  animation: expense-category-option-enter 190ms cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -251,6 +279,7 @@ dialog.expense-filter-sheet[open].is-closing::backdrop {
   *::before,
   *::after {
     animation-duration: 0.01ms !important;
+    animation-delay: 0ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
