@@ -22,7 +22,7 @@ import (
 func main() {
 	ctx := context.Background()
 
-	cfg, err := config.Load()
+	cfg, err := config.Load().
 	if err != nil {
 		log.Fatalf("loading config: %v", err)
 	}
