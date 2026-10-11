@@ -3,6 +3,7 @@ package httpapi
 import (
 	"encoding/json"
 	"errors"
+	"log/slog"
 	"net/http"
 
 	"github.com/Abuhurrara/rakam/api/internal/domain"
@@ -39,6 +40,10 @@ func writeError(w http.ResponseWriter, err error) {
 		status = http.StatusBadRequest
 	case errors.Is(err, domain.ErrInvalidDateRange):
 		status = http.StatusBadRequest
+	case errors.Is(err, domain.ErrInvalidImport):
+		status = http.StatusBadRequest
+	case errors.Is(err, domain.ErrImportAlreadyReviewed):
+		status = http.StatusConflict
 	case errors.Is(err, domain.ErrUnauthorized):
 		status = http.StatusUnauthorized
 	case errors.Is(err, domain.ErrInvalidCredentials):
@@ -46,7 +51,12 @@ func writeError(w http.ResponseWriter, err error) {
 	case errors.Is(err, domain.ErrInvalidPassword), errors.Is(err, domain.ErrInvalidUser), errors.Is(err, domain.ErrInvalidCurrentPassword):
 		status = http.StatusBadRequest
 	}
+	message := err.Error()
+	if status == http.StatusInternalServerError {
+		slog.Error("request failed", "error", err)
+		message = "internal server error"
+	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
-	json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
+	json.NewEncoder(w).Encode(map[string]string{"error": message})
 }

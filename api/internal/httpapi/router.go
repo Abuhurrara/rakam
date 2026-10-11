@@ -6,7 +6,7 @@ import (
 	"github.com/Abuhurrara/rakam/api/internal/service"
 )
 
-func NewRouter(categorySvc *service.CategoryService, transactionSvc *service.TransactionService, authSvc *service.AuthService, personSvc *service.PersonService, debtSvc *service.DebtService, budgetSvc *service.BudgetService, billSvc *service.RecurringBillService, summarySvc *service.SummaryService, exportSvc *service.ExportService, p pinger) http.Handler {
+func NewRouter(categorySvc *service.CategoryService, transactionSvc *service.TransactionService, authSvc *service.AuthService, personSvc *service.PersonService, debtSvc *service.DebtService, budgetSvc *service.BudgetService, billSvc *service.RecurringBillService, summarySvc *service.SummaryService, exportSvc *service.ExportService, importSvc *service.ImportService, p pinger) http.Handler {
 	mux := http.NewServeMux()
 
 	mux.HandleFunc("GET /api/health", handleHealth(p))
@@ -48,6 +48,15 @@ func NewRouter(categorySvc *service.CategoryService, transactionSvc *service.Tra
 	mux.Handle("GET /api/export", requireAuth(authSvc, handleExport(exportSvc)))
 
 	mux.Handle("GET /api/summary", requireAuth(authSvc, handleSummary(summarySvc)))
+
+	mux.Handle("POST /api/imports/pairing-code", requireAuth(authSvc, handleCreatePairingCode(importSvc)))
+	mux.HandleFunc("POST /api/imports/pair", handlePairDevice(importSvc))
+	mux.Handle("GET /api/imports/devices", requireAuth(authSvc, handleListImportDevices(importSvc)))
+	mux.Handle("DELETE /api/imports/devices/{id}", requireAuth(authSvc, handleRevokeImportDevice(importSvc)))
+	mux.Handle("POST /api/imports/sms", requireImportDevice(importSvc, handleIngestSMS(importSvc)))
+	mux.Handle("GET /api/imports", requireAuth(authSvc, handleListImports(importSvc)))
+	mux.Handle("POST /api/imports/{id}/ignore", requireAuth(authSvc, handleIgnoreImport(importSvc)))
+	mux.Handle("POST /api/imports/{id}/confirm", requireAuth(authSvc, handleConfirmImport(importSvc)))
 
 	return recovery(logging(mux))
 }

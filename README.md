@@ -2,7 +2,7 @@
 
 A private expense and lend/borrow ledger. Go API, Postgres, Next.js web app.
 
-Single user. Currency is Pakistani Rupee (PKR). Timezone is Asia/Karachi.
+Private, owner-provisioned accounts. Currency is Pakistani Rupee (PKR). Timezone is Asia/Karachi.
 
 See `SPEC.md` for what is being built and `CLAUDE.md` for how to work in this repo.
 
@@ -10,9 +10,45 @@ See `SPEC.md` for what is being built and `CLAUDE.md` for how to work in this re
 rakam/
   api/     Go service — deployed to Render
   web/     Next.js app — deployed to Vercel
+  android-companion/  Android receiver for new Meezan card-debit SMS
 ```
 
-One repo, two deployables.
+One repo, with API and web deployables plus an optional Android companion.
+
+## Meezan SMS import (in development)
+
+Migration `0005_sms_import` adds one-use phone pairing, revocable import-only
+device tokens, and user-scoped pending suggestions. Apply it to a **test**
+database first. The Android app receives only new SMS alerts (not history),
+checks the exact sender (default `8079`), and recognizes the card-debit format
+shown below. It sends only amount, Karachi time, and a fingerprint; the full
+SMS and OTPs stay on the phone. Alerts remain pending until the user opens
+**More → Bank imports** and confirms or ignores them. Confirmation creates one
+normal expense; only then do Home, Expenses, and Budget totals change.
+
+`PKR 506.00 has been debited at 00:10 on 12-Oct-2026, ...`
+
+To pair after deploying API migration and web update:
+
+1. Build and install `android-companion/` with Android Studio (JDK 17 or newer,
+   Android SDK 35), or run `cd android-companion && ./gradlew assembleDebug`.
+   The debug APK is at `app/build/outputs/apk/debug/app-debug.apk`. It uses only
+   Android platform APIs, not an SMS-reading library.
+2. In Rakam, open **More → Bank imports → Get pairing code**.
+3. In the companion, enter the Rakam HTTPS URL, sender `8079`, and the code.
+   Tap **Pair this phone**, then explicitly allow new SMS alerts.
+4. When a matching debit arrives, the companion queues its parsed details
+   locally and retries delivery when online. Open **Bank imports** to review.
+   If you entered the purchase manually already, ignore the suggestion.
+5. If the phone is lost, disconnect it from **Bank imports**. Its token then
+   cannot upload further alerts.
+
+No bank credentials, email password, `READ_SMS`, notification access, or SMS
+sending permission are requested. Bank-transfer emails, other Meezan SMS
+formats, physical-phone testing, signed release build, and Play Store review
+remain unverified/out of scope for this first card-debit format. Google Play
+requires review and approval for budgeting apps using `RECEIVE_SMS`; approval
+must not be assumed.
 
 ## Live release — September 9, 2026
 
@@ -40,8 +76,8 @@ Karachi month, supports past-month limits, and keeps account-scoped month
 snapshots visible while refreshing. This branch changes over-limit display to
 show exact rupees over and counts only limited categories in budget progress;
 The over-limit display is implemented in code, but its production deployment
-status is not tracked in this repository. Category management is implemented on the
-current `category-management` branch and still needs to be merged and deployed.
+status is not tracked in this repository. Category management is implemented;
+its production deployment status is not tracked here.
 Its emoji picker is intentionally curated and currently lacks some useful
 choices, such as school and bill icons. Recurring-bill management remains
 unfinished.

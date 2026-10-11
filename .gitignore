@@ -28,3 +28,9 @@ yarn-error.log*
 # Alternate build dir used for verifying without clobbering a running dev server
 .next-*/
 .vercel
+
+# Android companion build output / local SDK path
+/android-companion/.gradle/
+/android-companion/build/
+/android-companion/app/build/
+/android-companion/local.properties
