@@ -278,6 +278,16 @@ requests can be retried manually after reconnecting or signing back in. Never
 silently replay writes. Clearing site storage removes these drafts. Full offline
 editing and automatic background sync remain out of scope.
 
+The separate Android SMS companion is an exception only for bank-alert capture:
+it receives new SMS alerts, filters exact sender `8079` and the supported Meezan
+card-debit format on the device, and queues only parsed amount, date and a
+fingerprint for retry when the phone is offline. It never reads SMS history or
+sends the full SMS/OTP to the API. The web app still does not auto-sync offline
+edits. A short-lived, one-use code pairs the phone to one account; its scoped
+device token can only submit pending suggestions and can be revoked. Confirming
+a suggestion creates a normal expense atomically. Nothing is added to totals
+before review.
+
 ---
 
 ## Configuration
@@ -295,15 +305,15 @@ Load config once at startup into a struct and fail fast with a clear message if 
 
 The phases below describe the intended product, not a claim that every screen
 is complete. Home, Expenses, Ledger, Budget, Categories and export are
-implemented in the repository. Category management is on the current
-`category-management` branch and still needs to be merged and deployed. Its
+implemented in the repository. Category management is also implemented. Its
 emoji picker is curated and could use more options for categories such as
 school fees and bills. The Budget overage change is implemented in code, but
 its production deployment status is not tracked here. Recurring-bill API
 support exists, but its management screen is unfinished. Work-log UI/API,
 full offline editing and automatic sync, public signup, and email-based
 password recovery remain unfinished; account invitations are deferred.
-Physical Android installation still needs verification.
+The bank-alert import code is implemented on `feature/smart-import`, but its
+physical Android installation and live SMS delivery still need verification.
 
 ## Build phases
 
@@ -322,5 +332,14 @@ Physical Android installation still needs verification.
 **7 — Product screens.** Ledger, budget, bills, categories, home dashboard, export. *Verify:* every endpoint from phase 3 to 5 has a working screen.
 
 **8 — Work log, PWA, polish.** Work log API and editor, manifest, service worker, icons, dark mode, empty states, README. *Verify:* installs to a phone home screen, opens offline, and the work log persists without an explicit save.
+
+**9 — Bank alert import.** Add an Android receiver limited to new Meezan
+card-debit SMS from a configurable exact sender, offline queue with retry,
+device pairing and revocation, and a web review inbox. No raw SMS storage and
+no auto-posting to Expenses. *Verify:* parser rejects OTP/credit/wrong-sender
+texts; pairing is one-use; duplicate alerts produce one suggestion; account
+isolation holds; confirmation creates one transaction and updates Home totals;
+the app is installed and exercised on a physical Android phone. Google Play
+SMS-permission approval and real-device verification are release gates.
 
 ---

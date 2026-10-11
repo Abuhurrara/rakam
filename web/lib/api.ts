@@ -15,6 +15,8 @@ import type {
   TransactionInput,
   TransactionList,
   TransactionQuery,
+  ImportSuggestion,
+  ImportDevice,
   Summary,
   User,
 } from "./types";
@@ -231,6 +233,32 @@ export function restoreCategory(id: string): Promise<Category> {
 	return apiFetch<Category>(`/api/categories/${encodeURIComponent(id)}/restore`, {
 		method: "POST",
 	});
+}
+
+/* ---------------------------------------------------------- bank imports */
+
+export function listImports(signal?: AbortSignal): Promise<{ suggestions: ImportSuggestion[] }> {
+  return apiFetch("/api/imports", { signal });
+}
+
+export function createImportPairingCode(): Promise<{ code: string; expires_at: string }> {
+  return apiFetch("/api/imports/pairing-code", { method: "POST" });
+}
+
+export function listImportDevices(): Promise<{ devices: ImportDevice[] }> {
+  return apiFetch("/api/imports/devices");
+}
+
+export function revokeImportDevice(id: string): Promise<null> {
+  return apiFetch(`/api/imports/devices/${encodeURIComponent(id)}`, { method: "DELETE" });
+}
+
+export function ignoreImport(id: string): Promise<ImportSuggestion> {
+  return apiFetch(`/api/imports/${encodeURIComponent(id)}/ignore`, { method: "POST" });
+}
+
+export function confirmImport(id: string, input: TransactionInput): Promise<{ suggestion: ImportSuggestion; transaction: Transaction }> {
+  return apiFetch(`/api/imports/${encodeURIComponent(id)}/confirm`, { method: "POST", body: input });
 }
 
 /* -------------------------------------------------------------- ledger */

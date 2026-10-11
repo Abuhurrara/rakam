@@ -88,6 +88,20 @@ export type TransactionQuery = {
   offset?: number;
 };
 
+/** Pending bank alert. It does not affect totals until confirmed. */
+export type ImportSuggestion = {
+  id: string;
+  source: "meezan_sms";
+  kind: "expense";
+  amount_paisa: number;
+  occurred_at: string;
+  description: string;
+  status: "pending" | "confirmed" | "ignored";
+  transaction_id: string | null;
+};
+
+export type ImportDevice = { id: string; name: string; created_at: string };
+
 /** api/internal/httpapi/person.go — personResponse */
 export type Person = {
   id: string;

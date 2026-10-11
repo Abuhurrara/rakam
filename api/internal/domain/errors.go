@@ -22,6 +22,8 @@ var (
 	ErrInvalidRecurringBill   = errors.New("invalid recurring bill")
 	ErrInvalidMonth           = errors.New("invalid month")
 	ErrInvalidDateRange       = errors.New("invalid date range")
+	ErrInvalidImport          = errors.New("invalid import")
+	ErrImportAlreadyReviewed  = errors.New("import already reviewed")
 	// ErrPersonHasDebtEntries blocks deleting a person with any debt entry,
 	// settled or not — debt_entries.person_id has no ON DELETE cascade, and
 	// settled entries must stay viewable (SPEC.md), so a person can only be

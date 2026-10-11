@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { ApiError, getSummary } from "@/lib/api";
+import { ApiError, getSummary, listImports } from "@/lib/api";
 import {
   formatDayHeader,
   formatDueDate,
@@ -31,6 +31,15 @@ export function HomeScreen() {
   );
   const [error, setError] = useState<ApiError | null>(null);
   const [reloadNonce, setReloadNonce] = useState(0);
+  const [pendingImports, setPendingImports] = useState(0);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    listImports(controller.signal)
+      .then(({ suggestions }) => setPendingImports(suggestions.length))
+      .catch(() => { /* Import status never blocks Home. */ });
+    return () => controller.abort();
+  }, [reloadNonce, revision]);
 
   useEffect(() => {
     let cancelled = false;
@@ -133,6 +142,12 @@ export function HomeScreen() {
       ) : null}
 
       <MoneyOverview summary={summary} />
+      {pendingImports > 0 ? (
+        <Link href="/imports" className="mt-4 flex min-h-14 items-center justify-between gap-3 rounded-2xl border border-gold/40 bg-gold/10 px-4 text-sm font-medium text-ink focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary">
+          <span>{pendingImports} bank {pendingImports === 1 ? "alert" : "alerts"} waiting for review</span>
+          <span aria-hidden="true" className="text-xl text-ink-faint">›</span>
+        </Link>
+      ) : null}
       <BudgetCard summary={summary} />
       <StreetCard summary={summary} />
       <UpcomingBills bills={upcoming} />
