@@ -12,7 +12,7 @@ create table import_devices (
     name text not null,
     created_at timestamptz not null default now(),
     last_seen_at timestamptz,
-    revoked_at timestamptz,
+    revoked_at timestamptz
 );
 create index import_devices_user_id_idx on import_devices (user_id);
 
