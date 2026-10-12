@@ -43,7 +43,14 @@ public final class MainActivity extends Activity {
         pairButton = button("Pair this phone", v -> pair()); root.addView(pairButton);
         root.addView(button("Save website and sender", v -> saveSettings()));
         root.addView(button("Allow new SMS alerts", v -> requestSmsPermission()));
-        root.addView(button("Sync pending alerts", v -> { SyncJob.schedule(this); updateStatus("Sync scheduled. Open Rakam to review alerts."); }));
+        root.addView(button("Sync pending alerts", v -> {
+            try {
+                SyncJob.schedule(this);
+                updateStatus("Sync scheduled. Open Rakam to review alerts.");
+            } catch (RuntimeException ex) {
+                updateStatus("Could not schedule sync: " + ex.getMessage());
+            }
+        }));
         status = text("", 15); root.addView(status);
         ScrollView scroll = new ScrollView(this);
         scroll.addView(root);
@@ -105,8 +112,14 @@ public final class MainActivity extends Activity {
                 } finally { conn.disconnect(); }
                 store.configure(base, sender);
                 store.saveToken(response.getString("token"));
-                SyncJob.schedule(this);
-                runOnUiThread(() -> { codeInput.setText(""); updateStatus("Paired. Now allow SMS alerts below."); });
+                String pairedStatus = "Paired. Now allow SMS alerts below.";
+                try {
+                    SyncJob.schedule(this);
+                } catch (RuntimeException ex) {
+                    pairedStatus = "Paired, but sync could not be scheduled: " + ex.getMessage();
+                }
+                String finalStatus = pairedStatus;
+                runOnUiThread(() -> { codeInput.setText(""); updateStatus(finalStatus); });
             } catch (Exception ex) {
                 runOnUiThread(() -> updateStatus("Could not pair: " + ex.getMessage()));
             } finally { runOnUiThread(() -> pairButton.setEnabled(true)); }

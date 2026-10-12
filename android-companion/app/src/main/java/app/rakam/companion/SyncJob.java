@@ -24,7 +24,9 @@ public final class SyncJob extends JobService {
             .setPersisted(true)
             .setBackoffCriteria(30_000, JobInfo.BACKOFF_POLICY_EXPONENTIAL)
             .build();
-        scheduler.schedule(job);
+        if (scheduler.schedule(job) == JobScheduler.RESULT_FAILURE) {
+            throw new IllegalStateException("Android could not schedule the background job");
+        }
     }
 
     @Override public boolean onStartJob(JobParameters params) {
