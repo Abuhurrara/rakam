@@ -43,6 +43,16 @@ To pair after deploying API migration and web update:
 5. If the phone is lost, disconnect it from **Bank imports**. Its token then
    cannot upload further alerts.
 
+For a missing alert, update the companion APK **over the installed app** (do not
+uninstall it; that would erase its pairing and local queue). Open the companion
+and tap **Refresh phone status**. After the next real bank SMS, the status shows
+the last SMS signal, whether sender `8079` was seen, and whether the debit was
+saved locally. If the last SMS signal remains unchanged, Android did not deliver
+that SMS to the companion; check SMS permission and the phone's background
+autostart setting. If the bank SMS was received but not recognized, the alert
+format needs an updated parser. If it was saved but remains waiting, use **Sync
+pending alerts** and check the sync status. The status stores no SMS text.
+
 No bank credentials, email password, `READ_SMS`, notification access, or SMS
 sending permission are requested. Bank-transfer emails, other Meezan SMS
 formats, physical-phone testing, signed release build, and Play Store review
