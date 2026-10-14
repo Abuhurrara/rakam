@@ -16,11 +16,14 @@ import java.io.OutputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
+import java.text.DateFormat;
+import java.util.Date;
 import org.json.JSONObject;
 
 public final class MainActivity extends Activity {
     private LocalStore store;
     private TextView status;
+    private TextView diagnostics;
     private EditText urlInput, senderInput, codeInput;
     private Button pairButton;
 
@@ -34,6 +37,9 @@ public final class MainActivity extends Activity {
         TextView title = text("Rakam SMS companion", 24);
         root.addView(title);
         root.addView(text("Only new card-debit alerts from your chosen sender are parsed. The full SMS, phone number and OTPs are never sent to Rakam. Every purchase waits for your review before becoming an expense.", 15));
+        status = text("", 15); root.addView(status);
+        diagnostics = text("", 14); root.addView(diagnostics);
+        root.addView(button("Refresh phone status", v -> refreshDiagnostics()));
         root.addView(text("Rakam website (HTTPS)", 14));
         urlInput = input(store.baseUrl()); root.addView(urlInput);
         root.addView(text("Exact SMS sender", 14));
@@ -44,18 +50,28 @@ public final class MainActivity extends Activity {
         root.addView(button("Save website and sender", v -> saveSettings()));
         root.addView(button("Allow new SMS alerts", v -> requestSmsPermission()));
         root.addView(button("Sync pending alerts", v -> {
+            if (store.pendingCount() == 0) {
+                updateStatus("No alerts are waiting on this phone. Sync has nothing to send.");
+                refreshDiagnostics();
+                return;
+            }
             try {
                 SyncJob.schedule(this);
-                updateStatus("Sync scheduled. Open Rakam to review alerts.");
+                updateStatus("Sync requested. Refresh phone status shortly, then open Rakam to review alerts.");
             } catch (RuntimeException ex) {
                 updateStatus("Could not schedule sync: " + ex.getMessage());
             }
+            refreshDiagnostics();
         }));
-        status = text("", 15); root.addView(status);
         ScrollView scroll = new ScrollView(this);
         scroll.addView(root);
         setContentView(scroll);
-        updateStatus(store.token().isEmpty() ? "Not paired yet." : "Paired. " + store.pendingCount() + " alerts waiting on this phone. " + store.syncStatus());
+        refreshDiagnostics();
+    }
+
+    @Override protected void onResume() {
+        super.onResume();
+        if (diagnostics != null) refreshDiagnostics();
     }
 
     private TextView text(String value, int size) {
@@ -73,6 +89,24 @@ public final class MainActivity extends Activity {
         Button view = new Button(this); view.setText(label); view.setOnClickListener(click); return view;
     }
     private void updateStatus(String value) { status.setText(value); }
+
+    private void refreshDiagnostics() {
+        String paired = store.token().isEmpty() ? "Not paired" : "Paired";
+        String permission = checkSelfPermission(Manifest.permission.RECEIVE_SMS) == PackageManager.PERMISSION_GRANTED
+            ? "allowed" : "not allowed";
+        diagnostics.setText("Phone status: " + paired + " · SMS permission " + permission
+            + " · " + store.pendingCount() + " alerts waiting\n"
+            + "Last SMS signal: " + timeOf(store.lastSmsAt()) + "\n"
+            + "Last bank SMS from " + store.sender() + ": " + timeOf(store.lastBankSmsAt()) + "\n"
+            + "Result: " + store.lastBankSmsResult() + "\n"
+            + "Sync: " + store.syncStatus()
+            + "\nOnly times and results are saved here, never SMS text.");
+    }
+
+    private String timeOf(long timestamp) {
+        return timestamp == 0 ? "none yet"
+            : DateFormat.getDateTimeInstance(DateFormat.MEDIUM, DateFormat.SHORT).format(new Date(timestamp));
+    }
 
     private void saveSettings() {
         String base = urlInput.getText().toString().trim().replaceAll("/+$", "");
@@ -119,7 +153,7 @@ public final class MainActivity extends Activity {
                     pairedStatus = "Paired, but sync could not be scheduled: " + ex.getMessage();
                 }
                 String finalStatus = pairedStatus;
-                runOnUiThread(() -> { codeInput.setText(""); updateStatus(finalStatus); });
+                runOnUiThread(() -> { codeInput.setText(""); updateStatus(finalStatus); refreshDiagnostics(); });
             } catch (Exception ex) {
                 runOnUiThread(() -> updateStatus("Could not pair: " + ex.getMessage()));
             } finally { runOnUiThread(() -> pairButton.setEnabled(true)); }
@@ -131,7 +165,9 @@ public final class MainActivity extends Activity {
             updateStatus("This device cannot receive bank SMS alerts."); return;
         }
         if (checkSelfPermission(Manifest.permission.RECEIVE_SMS) == PackageManager.PERMISSION_GRANTED) {
-            updateStatus("SMS permission is already allowed. Only new alerts from " + store.sender() + " will be used."); return;
+            updateStatus("SMS permission is already allowed. Only new alerts from " + store.sender() + " will be used.");
+            refreshDiagnostics();
+            return;
         }
         requestPermissions(new String[]{Manifest.permission.RECEIVE_SMS}, 1);
     }
@@ -140,5 +176,6 @@ public final class MainActivity extends Activity {
         super.onRequestPermissionsResult(requestCode, permissions, results);
         if (requestCode == 1) updateStatus(results.length > 0 && results[0] == PackageManager.PERMISSION_GRANTED
             ? "Ready. New matching alerts will sync when online." : "SMS permission denied. Import cannot run automatically.");
+        refreshDiagnostics();
     }
 }

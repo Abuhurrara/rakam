@@ -48,6 +48,10 @@ public final class SyncJob extends JobService {
         }
         try {
             JSONArray items = store.queue();
+            if (items.length() == 0) {
+                store.setSyncStatus("No alerts to sync yet.");
+                return false;
+            }
             for (int i = 0; i < items.length(); i++) {
                 JSONObject item = items.getJSONObject(i);
                 HttpURLConnection conn = (HttpURLConnection) new URL(store.baseUrl() + "/api/imports/sms").openConnection();

@@ -27,6 +27,14 @@ final class LocalStore {
     void configure(String baseUrl, String sender) { prefs.edit().putString("base_url", baseUrl).putString("sender", sender).apply(); }
     String syncStatus() { return prefs.getString("sync_status", "No alerts synced yet."); }
     void setSyncStatus(String value) { prefs.edit().putString("sync_status", value).apply(); }
+    long lastSmsAt() { return prefs.getLong("last_sms_at", 0); }
+    long lastBankSmsAt() { return prefs.getLong("last_bank_sms_at", 0); }
+    String lastBankSmsResult() { return prefs.getString("last_bank_sms_result", "No bank SMS seen by the companion yet."); }
+    void noteSmsReceived() { prefs.edit().putLong("last_sms_at", System.currentTimeMillis()).commit(); }
+    void noteBankSms(String result) {
+        prefs.edit().putLong("last_bank_sms_at", System.currentTimeMillis())
+            .putString("last_bank_sms_result", result).commit();
+    }
 
     String token() {
         String encoded = prefs.getString("token", "");
