@@ -3,8 +3,13 @@ package app.rakam.companion;
 import android.Manifest;
 import android.app.Activity;
 import android.content.pm.PackageManager;
+import android.graphics.Rect;
+import android.graphics.Typeface;
+import android.graphics.drawable.GradientDrawable;
+import android.os.Build;
 import android.os.Bundle;
 import android.view.View;
+import android.view.inputmethod.InputMethodManager;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.LinearLayout;
@@ -24,48 +29,75 @@ import org.json.JSONObject;
 public final class MainActivity extends Activity {
     private LocalStore store;
     private TextView status;
+    private TextView summary, smsTestResult;
     private TextView diagnostics;
+    private TextView pastedSmsResult, connectionResult;
     private EditText testSmsInput;
     private EditText urlInput, senderInput, codeInput;
-    private Button pairButton;
+    private Button pairButton, detailsButton;
+    private LinearLayout detailsPanel;
 
     @Override public void onCreate(Bundle state) {
         super.onCreate(state);
         store = new LocalStore(this);
         LinearLayout root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
-        root.setPadding(24, 32, 24, 24);
+        root.setPadding(24, 24, 24, 24);
         root.setBackgroundColor(0xfff6f2e8);
         TextView title = text("Rakam SMS companion", 24);
+        title.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
         root.addView(title);
-        root.addView(text("Only new card-debit alerts from your chosen sender are parsed. The full SMS, phone number and OTPs are never sent to Rakam. Every purchase waits for your review before becoming an expense.", 15));
-        status = text("", 15); root.addView(status);
-        diagnostics = text("", 14); root.addView(diagnostics);
-        root.addView(button("Refresh phone status", v -> refreshDiagnostics()));
-        root.addView(text("Safe tests — nothing is uploaded or added to Expenses", 18));
-        root.addView(button("Start dummy SMS test", v -> startSmsTest()));
-        root.addView(text("For 15 minutes, the companion checks new SMS for that exact test code from any sender. No other SMS text is saved or sent. Ask another phone to send it to yours.", 14));
-        root.addView(text("Check an old Meezan message without making a payment", 14));
+        root.addView(text("New Meezan debit alerts appear in Rakam for you to review.", 15));
+        summary = text("", 17);
+        summary.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+        summary.setPadding(20, 16, 20, 16);
+        GradientDrawable summaryBackground = new GradientDrawable();
+        summaryBackground.setColor(0xffe0ece6);
+        summaryBackground.setCornerRadius(18);
+        summary.setBackground(summaryBackground);
+        root.addView(summary);
+        if ("Xiaomi".equalsIgnoreCase(Build.MANUFACTURER)) {
+            root.addView(text("Xiaomi: allow Background autostart for this app in phone Settings, or alerts may be missed.", 14));
+        }
+        status = text("", 15); root.addView(status); updateStatus("");
+
+        root.addView(section("1. Test that SMS reaches this phone"));
+        root.addView(button("Start safe SMS test", v -> startSmsTest()));
+        smsTestResult = text("", 15); root.addView(smsTestResult);
+
+        root.addView(section("2. Test the bank message format"));
+        root.addView(text("Paste an old alert. It stays on this phone and creates no expense.", 14));
         testSmsInput = new EditText(this);
-        testSmsInput.setHint("Paste SMS text here; it is checked only on this phone");
+        testSmsInput.setHint("Paste a Meezan debit SMS");
         testSmsInput.setSingleLine(false);
         testSmsInput.setMinLines(2);
         testSmsInput.setMaxLines(4);
         testSmsInput.setSaveEnabled(false);
         testSmsInput.setImportantForAutofill(View.IMPORTANT_FOR_AUTOFILL_NO);
         root.addView(testSmsInput);
-        root.addView(button("Check pasted message locally", v -> testPastedSms()));
-        root.addView(button("Check Rakam connection (read-only)", v -> checkConnection()));
-        root.addView(text("Rakam website (HTTPS)", 14));
-        urlInput = input(store.baseUrl()); root.addView(urlInput);
-        root.addView(text("Exact SMS sender", 14));
-        senderInput = input(store.sender()); root.addView(senderInput);
-        root.addView(text("One-time code from Rakam → More → Bank imports", 14));
-        codeInput = input(""); root.addView(codeInput);
-        pairButton = button("Pair this phone", v -> pair()); root.addView(pairButton);
-        root.addView(button("Save website and sender", v -> saveSettings()));
-        root.addView(button("Allow new SMS alerts", v -> requestSmsPermission()));
-        root.addView(button("Sync pending alerts", v -> {
+        root.addView(button("Check message", v -> testPastedSms()));
+        pastedSmsResult = text("", 15);
+        root.addView(pastedSmsResult);
+
+        root.addView(section("3. Check Rakam connection"));
+        root.addView(button("Check connection", v -> checkConnection()));
+        connectionResult = text(store.connectionStatus(), 15);
+        root.addView(connectionResult);
+
+        detailsButton = button("Show setup & details", v -> setDetailsVisible(detailsPanel.getVisibility() != View.VISIBLE));
+        root.addView(detailsButton);
+        detailsPanel = new LinearLayout(this);
+        detailsPanel.setOrientation(LinearLayout.VERTICAL);
+        detailsPanel.addView(text("Rakam website (HTTPS)", 14));
+        urlInput = input(store.baseUrl()); detailsPanel.addView(urlInput);
+        detailsPanel.addView(text("Exact SMS sender", 14));
+        senderInput = input(store.sender()); detailsPanel.addView(senderInput);
+        detailsPanel.addView(text("One-time code from Rakam → More → Bank imports", 14));
+        codeInput = input(""); detailsPanel.addView(codeInput);
+        pairButton = button("Pair this phone", v -> pair()); detailsPanel.addView(pairButton);
+        detailsPanel.addView(button("Save website and sender", v -> saveSettings()));
+        detailsPanel.addView(button("Allow new SMS alerts", v -> requestSmsPermission()));
+        detailsPanel.addView(button("Sync pending alerts", v -> {
             if (store.pendingCount() == 0) {
                 updateStatus("No alerts are waiting on this phone. Sync has nothing to send.");
                 refreshDiagnostics();
@@ -79,7 +111,21 @@ public final class MainActivity extends Activity {
             }
             refreshDiagnostics();
         }));
+        detailsPanel.addView(button("Refresh phone status", v -> refreshDiagnostics()));
+        diagnostics = text("", 14); detailsPanel.addView(diagnostics);
+        root.addView(detailsPanel);
+        setDetailsVisible(store.token().isEmpty()
+            || checkSelfPermission(Manifest.permission.RECEIVE_SMS) != PackageManager.PERMISSION_GRANTED);
         ScrollView scroll = new ScrollView(this);
+        scroll.setBackgroundColor(0xfff6f2e8);
+        scroll.setClipToPadding(false);
+        scroll.setOnApplyWindowInsetsListener((view, insets) -> {
+            scroll.setPadding(0, insets.getSystemWindowInsetTop(), 0, insets.getSystemWindowInsetBottom());
+            return insets;
+        });
+        getWindow().getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR);
+        getWindow().setStatusBarColor(0xfff6f2e8);
+        getWindow().setNavigationBarColor(0xfff6f2e8);
         scroll.addView(root);
         setContentView(scroll);
         refreshDiagnostics();
@@ -96,6 +142,12 @@ public final class MainActivity extends Activity {
         view.setPadding(0, 12, 0, 12);
         return view;
     }
+    private TextView section(String value) {
+        TextView view = text(value, 18);
+        view.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+        view.setPadding(0, 24, 0, 8);
+        return view;
+    }
     private EditText input(String value) {
         EditText view = new EditText(this);
         view.setSingleLine(true); view.setText(value); view.setTextSize(16);
@@ -104,18 +156,34 @@ public final class MainActivity extends Activity {
     private Button button(String label, View.OnClickListener click) {
         Button view = new Button(this); view.setText(label); view.setOnClickListener(click); return view;
     }
-    private void updateStatus(String value) { status.setText(value); }
+    private void updateStatus(String value) {
+        status.setText(value);
+        status.setVisibility(value.isEmpty() ? View.GONE : View.VISIBLE);
+    }
+
+    private void setDetailsVisible(boolean visible) {
+        detailsPanel.setVisibility(visible ? View.VISIBLE : View.GONE);
+        detailsButton.setText(visible ? "Hide setup & details" : "Show setup & details");
+    }
 
     private void refreshDiagnostics() {
-        String paired = store.token().isEmpty() ? "Not paired" : "Paired";
-        String permission = checkSelfPermission(Manifest.permission.RECEIVE_SMS) == PackageManager.PERMISSION_GRANTED
-            ? "allowed" : "not allowed";
-        diagnostics.setText("Phone status: " + paired + " · SMS permission " + permission
+        boolean paired = !store.token().isEmpty();
+        boolean allowed = checkSelfPermission(Manifest.permission.RECEIVE_SMS) == PackageManager.PERMISSION_GRANTED;
+        summary.setText(!paired ? "Setup needed: pair this phone" : !allowed
+            ? "Setup needed: allow SMS alerts"
+            : "Paired · SMS allowed · " + store.pendingCount() + " waiting");
+        summary.setTextColor(paired && allowed ? 0xff206047 : 0xff9b3d31);
+        String code = store.activeSmsTestCode();
+        smsTestResult.setText(code.isEmpty() ? store.smsTestResult()
+            : "Ask another phone to text you exactly:\nRAKAM TEST " + code
+                + "\nThis code expires in 15 minutes. The test creates no expense.");
+        String pairedLabel = paired ? "Paired" : "Not paired";
+        String permission = allowed ? "allowed" : "not allowed";
+        diagnostics.setText("Phone status: " + pairedLabel + " · SMS permission " + permission
             + " · " + store.pendingCount() + " alerts waiting\n"
             + "Last SMS signal: " + timeOf(store.lastSmsAt()) + "\n"
             + "Last bank SMS from " + store.sender() + ": " + timeOf(store.lastBankSmsAt()) + "\n"
             + "Result: " + store.lastBankSmsResult() + "\n"
-            + (store.activeSmsTestCode().isEmpty() ? "" : "Dummy SMS to send: RAKAM TEST " + store.activeSmsTestCode() + "\n")
             + "Dummy SMS result: " + store.smsTestResult() + "\n"
             + "Rakam connection: " + store.connectionStatus() + "\n"
             + "Sync: " + store.syncStatus()
@@ -126,33 +194,52 @@ public final class MainActivity extends Activity {
         String code = Integer.toString(100000 + new SecureRandom().nextInt(900000));
         try {
             store.beginSmsTest(code);
-            updateStatus("For the next 15 minutes, ask another phone to send exactly: RAKAM TEST " + code);
+            updateStatus("");
         } catch (RuntimeException ex) {
             updateStatus("Could not start the SMS test on this phone.");
         }
         refreshDiagnostics();
+        reveal(smsTestResult);
     }
 
     private void testPastedSms() {
         String body = testSmsInput.getText().toString();
         testSmsInput.setText("");
+        InputMethodManager keyboard = (InputMethodManager) getSystemService(INPUT_METHOD_SERVICE);
+        if (keyboard != null) keyboard.hideSoftInputFromWindow(testSmsInput.getWindowToken(), 0);
+        testSmsInput.clearFocus();
         if (body.trim().isEmpty()) {
-            updateStatus("Paste a Meezan debit SMS first. Nothing will be uploaded.");
+            showPastedSmsResult("Paste a Meezan debit SMS first. Nothing was uploaded.", false);
             return;
         }
         MeezanParser.Alert alert = MeezanParser.parse(store.sender(), store.sender(), body, System.currentTimeMillis());
-        updateStatus(alert == null
-            ? "This text did not match the supported Meezan debit format. Nothing was uploaded."
-            : "Format recognized: PKR " + alert.amount + " at " + alert.occurredAt + ". Nothing was uploaded.");
+        showPastedSmsResult(alert == null
+            ? "Not recognized: this text did not match the Meezan debit format. Nothing was uploaded."
+            : "Recognized: PKR " + alert.amount + " at " + alert.occurredAt + ". Nothing was uploaded.", alert != null);
+    }
+
+    private void showPastedSmsResult(String result, boolean recognized) {
+        pastedSmsResult.setText(result);
+        pastedSmsResult.setTextColor(recognized ? 0xff206047 : 0xff9b3d31);
+        reveal(pastedSmsResult);
+    }
+
+    private void showConnectionResult(String result) {
+        connectionResult.setText(result);
+        reveal(connectionResult);
+    }
+
+    private void reveal(TextView view) {
+        view.post(() -> view.requestRectangleOnScreen(new Rect(0, 0, view.getWidth(), view.getHeight()), true));
     }
 
     private void checkConnection() {
         String token = store.token();
         if (token.isEmpty()) {
-            updateStatus("Pair this phone first. No data was sent.");
+            showConnectionResult("Pair this phone first. No data was sent.");
             return;
         }
-        updateStatus("Checking Rakam connection…");
+        showConnectionResult("Checking Rakam connection…");
         new Thread(() -> {
             String result;
             try {
@@ -173,7 +260,7 @@ public final class MainActivity extends Activity {
             }
             String finalResult = result;
             store.setConnectionStatus(finalResult);
-            runOnUiThread(() -> { updateStatus(finalResult); refreshDiagnostics(); });
+            runOnUiThread(() -> { showConnectionResult(finalResult); refreshDiagnostics(); });
         }, "rakam-device-check").start();
     }
 
