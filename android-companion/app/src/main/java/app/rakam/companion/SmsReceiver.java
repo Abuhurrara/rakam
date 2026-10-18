@@ -15,18 +15,23 @@ public final class SmsReceiver extends BroadcastReceiver {
         SmsMessage[] parts = Telephony.Sms.Intents.getMessagesFromIntent(intent);
         if (parts == null || parts.length == 0) return;
         String sender = parts[0].getOriginatingAddress();
-        if (sender == null || !sender.equals(store.sender())) return;
-        if (store.token().isEmpty()) {
-            store.noteBankSms("Received, but this phone was not paired.");
-            return;
-        }
+        if (sender == null) return;
+        boolean bankSender = sender.equals(store.sender());
+        boolean testActive = !store.activeSmsTestCode().isEmpty();
+        if (!bankSender && !testActive) return;
         StringBuilder body = new StringBuilder();
         for (SmsMessage part : parts) {
             if (!sender.equals(part.getOriginatingAddress())) {
-                store.noteBankSms("Received, but message parts had different senders.");
+                if (bankSender) store.noteBankSms("Received, but message parts had different senders.");
                 return;
             }
             body.append(part.getMessageBody());
+        }
+        if (testActive && store.acceptTestSms(body.toString())) return;
+        if (!bankSender) return;
+        if (store.token().isEmpty()) {
+            store.noteBankSms("Received, but this phone was not paired.");
+            return;
         }
         MeezanParser.Alert alert = MeezanParser.parse(sender, store.sender(), body.toString(), parts[0].getTimestampMillis());
         if (alert == null) {

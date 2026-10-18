@@ -18,12 +18,14 @@ import java.net.URL;
 import java.nio.charset.StandardCharsets;
 import java.text.DateFormat;
 import java.util.Date;
+import java.security.SecureRandom;
 import org.json.JSONObject;
 
 public final class MainActivity extends Activity {
     private LocalStore store;
     private TextView status;
     private TextView diagnostics;
+    private EditText testSmsInput;
     private EditText urlInput, senderInput, codeInput;
     private Button pairButton;
 
@@ -40,6 +42,20 @@ public final class MainActivity extends Activity {
         status = text("", 15); root.addView(status);
         diagnostics = text("", 14); root.addView(diagnostics);
         root.addView(button("Refresh phone status", v -> refreshDiagnostics()));
+        root.addView(text("Safe tests — nothing is uploaded or added to Expenses", 18));
+        root.addView(button("Start dummy SMS test", v -> startSmsTest()));
+        root.addView(text("For 15 minutes, the companion checks new SMS for that exact test code from any sender. No other SMS text is saved or sent. Ask another phone to send it to yours.", 14));
+        root.addView(text("Check an old Meezan message without making a payment", 14));
+        testSmsInput = new EditText(this);
+        testSmsInput.setHint("Paste SMS text here; it is checked only on this phone");
+        testSmsInput.setSingleLine(false);
+        testSmsInput.setMinLines(2);
+        testSmsInput.setMaxLines(4);
+        testSmsInput.setSaveEnabled(false);
+        testSmsInput.setImportantForAutofill(View.IMPORTANT_FOR_AUTOFILL_NO);
+        root.addView(testSmsInput);
+        root.addView(button("Check pasted message locally", v -> testPastedSms()));
+        root.addView(button("Check Rakam connection (read-only)", v -> checkConnection()));
         root.addView(text("Rakam website (HTTPS)", 14));
         urlInput = input(store.baseUrl()); root.addView(urlInput);
         root.addView(text("Exact SMS sender", 14));
@@ -99,8 +115,66 @@ public final class MainActivity extends Activity {
             + "Last SMS signal: " + timeOf(store.lastSmsAt()) + "\n"
             + "Last bank SMS from " + store.sender() + ": " + timeOf(store.lastBankSmsAt()) + "\n"
             + "Result: " + store.lastBankSmsResult() + "\n"
+            + (store.activeSmsTestCode().isEmpty() ? "" : "Dummy SMS to send: RAKAM TEST " + store.activeSmsTestCode() + "\n")
+            + "Dummy SMS result: " + store.smsTestResult() + "\n"
+            + "Rakam connection: " + store.connectionStatus() + "\n"
             + "Sync: " + store.syncStatus()
             + "\nOnly times and results are saved here, never SMS text.");
+    }
+
+    private void startSmsTest() {
+        String code = Integer.toString(100000 + new SecureRandom().nextInt(900000));
+        try {
+            store.beginSmsTest(code);
+            updateStatus("For the next 15 minutes, ask another phone to send exactly: RAKAM TEST " + code);
+        } catch (RuntimeException ex) {
+            updateStatus("Could not start the SMS test on this phone.");
+        }
+        refreshDiagnostics();
+    }
+
+    private void testPastedSms() {
+        String body = testSmsInput.getText().toString();
+        testSmsInput.setText("");
+        if (body.trim().isEmpty()) {
+            updateStatus("Paste a Meezan debit SMS first. Nothing will be uploaded.");
+            return;
+        }
+        MeezanParser.Alert alert = MeezanParser.parse(store.sender(), store.sender(), body, System.currentTimeMillis());
+        updateStatus(alert == null
+            ? "This text did not match the supported Meezan debit format. Nothing was uploaded."
+            : "Format recognized: PKR " + alert.amount + " at " + alert.occurredAt + ". Nothing was uploaded.");
+    }
+
+    private void checkConnection() {
+        String token = store.token();
+        if (token.isEmpty()) {
+            updateStatus("Pair this phone first. No data was sent.");
+            return;
+        }
+        updateStatus("Checking Rakam connection…");
+        new Thread(() -> {
+            String result;
+            try {
+                HttpURLConnection conn = (HttpURLConnection) new URL(store.baseUrl() + "/api/imports/device-check").openConnection();
+                try {
+                    conn.setRequestMethod("GET");
+                    conn.setConnectTimeout(15_000);
+                    conn.setReadTimeout(15_000);
+                    conn.setRequestProperty("Authorization", "Bearer " + token);
+                    int statusCode = conn.getResponseCode();
+                    if (statusCode == 200) result = "Connected. Rakam accepted this phone. No alert was sent.";
+                    else if (statusCode == 401 || statusCode == 403) result = "Rakam rejected this pairing. Pair the phone again.";
+                    else if (statusCode == 404) result = "Rakam has not deployed the new connection-check endpoint yet.";
+                    else result = "Rakam connection check returned HTTP " + statusCode + ".";
+                } finally { conn.disconnect(); }
+            } catch (Exception ignored) {
+                result = "Could not reach Rakam. Check internet and the website URL.";
+            }
+            String finalResult = result;
+            store.setConnectionStatus(finalResult);
+            runOnUiThread(() -> { updateStatus(finalResult); refreshDiagnostics(); });
+        }, "rakam-device-check").start();
     }
 
     private String timeOf(long timestamp) {

@@ -53,6 +53,18 @@ autostart setting. If the bank SMS was received but not recognized, the alert
 format needs an updated parser. If it was saved but remains waiting, use **Sync
 pending alerts** and check the sync status. The status stores no SMS text.
 
+You can test without a payment: tap **Start dummy SMS test** in the companion,
+then ask another phone to send the exact `RAKAM TEST 123456`-style code shown
+on your screen within 15 minutes. Tap **Refresh phone status**. The test message
+is never queued or uploaded and cannot create an expense. You can also copy an
+older Meezan debit SMS into **Check pasted message locally** to test its format;
+the pasted text is cleared immediately and is not sent to the API. These local
+tests check Android SMS delivery and parsing separately. **Check Rakam connection
+(read-only)** verifies the pairing token against the API without creating a
+suggestion; deploy the matching API update before using it. Even these three
+checks do not prove that a real alert uploads successfully; that still needs a
+future bank SMS or an isolated staging end-to-end test.
+
 No bank credentials, email password, `READ_SMS`, notification access, or SMS
 sending permission are requested. Bank-transfer emails, other Meezan SMS
 formats, physical-phone testing, signed release build, and Play Store review

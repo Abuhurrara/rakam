@@ -53,6 +53,7 @@ func NewRouter(categorySvc *service.CategoryService, transactionSvc *service.Tra
 	mux.HandleFunc("POST /api/imports/pair", handlePairDevice(importSvc))
 	mux.Handle("GET /api/imports/devices", requireAuth(authSvc, handleListImportDevices(importSvc)))
 	mux.Handle("DELETE /api/imports/devices/{id}", requireAuth(authSvc, handleRevokeImportDevice(importSvc)))
+	mux.Handle("GET /api/imports/device-check", requireImportDevice(importSvc, handleCheckImportDevice()))
 	mux.Handle("POST /api/imports/sms", requireImportDevice(importSvc, handleIngestSMS(importSvc)))
 	mux.Handle("GET /api/imports", requireAuth(authSvc, handleListImports(importSvc)))
 	mux.Handle("POST /api/imports/{id}/ignore", requireAuth(authSvc, handleIgnoreImport(importSvc)))
