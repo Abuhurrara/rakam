@@ -98,6 +98,14 @@ func TestSMSImportHTTPFlowWithPostgres(t *testing.T) {
 	if device.Token == "" {
 		t.Fatal("no device token")
 	}
+	res = call("GET", "/api/imports/device-check", nil, nil, "")
+	if res.Code != http.StatusUnauthorized {
+		t.Fatalf("unauthorized device check: %d", res.Code)
+	}
+	res = call("GET", "/api/imports/device-check", nil, nil, device.Token)
+	if res.Code != http.StatusOK || !strings.Contains(res.Body.String(), `"status":"ready"`) {
+		t.Fatalf("device check: %d %s", res.Code, res.Body.String())
+	}
 	res = call("POST", "/api/imports/pair", map[string]string{"code": pairing.Code, "name": "Replay"}, nil, "")
 	if res.Code != 401 {
 		t.Fatalf("pair code replay accepted: %d", res.Code)

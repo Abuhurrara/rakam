@@ -27,6 +27,8 @@ final class LocalStore {
     void configure(String baseUrl, String sender) { prefs.edit().putString("base_url", baseUrl).putString("sender", sender).apply(); }
     String syncStatus() { return prefs.getString("sync_status", "No alerts synced yet."); }
     void setSyncStatus(String value) { prefs.edit().putString("sync_status", value).apply(); }
+    String connectionStatus() { return prefs.getString("connection_status", "Not checked yet."); }
+    void setConnectionStatus(String value) { prefs.edit().putString("connection_status", value).apply(); }
     long lastSmsAt() { return prefs.getLong("last_sms_at", 0); }
     long lastBankSmsAt() { return prefs.getLong("last_bank_sms_at", 0); }
     String lastBankSmsResult() { return prefs.getString("last_bank_sms_result", "No bank SMS seen by the companion yet."); }
@@ -34,6 +36,31 @@ final class LocalStore {
     void noteBankSms(String result) {
         prefs.edit().putLong("last_bank_sms_at", System.currentTimeMillis())
             .putString("last_bank_sms_result", result).commit();
+    }
+    void beginSmsTest(String code) {
+        if (!prefs.edit().putString("sms_test_code", code)
+            .putLong("sms_test_expires_at", System.currentTimeMillis() + 15 * 60 * 1000L)
+            .putString("sms_test_result", "Waiting for the test SMS.").commit()) {
+            throw new IllegalStateException("Could not save test code");
+        }
+    }
+    String activeSmsTestCode() {
+        if (System.currentTimeMillis() >= prefs.getLong("sms_test_expires_at", 0)) return "";
+        return prefs.getString("sms_test_code", "");
+    }
+    String smsTestResult() {
+        if (prefs.getLong("sms_test_expires_at", 0) > 0 && activeSmsTestCode().isEmpty()) {
+            return "Test expired without a matching SMS. Start another test.";
+        }
+        return prefs.getString("sms_test_result", "No test SMS received yet.");
+    }
+    boolean acceptTestSms(String body) {
+        String code = activeSmsTestCode();
+        if (code.isEmpty() || !SmsTestPhrase.matches(body, code)) return false;
+        return prefs.edit().remove("sms_test_code").remove("sms_test_expires_at")
+            .putString("sms_test_result", "Test SMS arrived at "
+                + java.text.DateFormat.getDateTimeInstance(java.text.DateFormat.MEDIUM, java.text.DateFormat.SHORT)
+                    .format(new java.util.Date()) + ". No alert was uploaded.").commit();
     }
 
     String token() {
